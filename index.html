@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>奥特曼盲盒 - 光之抽奖</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 背景粒子 -->
+  <canvas id="bgCanvas"></canvas>
+
+  <!-- 顶部导航 -->
+  <header id="header">
+    <div class="logo">
+      <span class="logo-icon">⚡</span>
+      <span class="logo-text">光之盲盒</span>
+    </div>
+    <div class="points-display">
+      <span class="points-label">⚡ 能量积分</span>
+      <span class="points-value" id="pointsValue">100</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="btnDaily" title="每日签到领积分">🎁 签到</button>
+      <button class="btn-icon" id="btnHistory" title="抽奖记录">📋 记录</button>
+      <button class="btn-icon" id="btnSettings" title="自定义设置">⚙️ 设置</button>
+    </div>
+  </header>
+
+  <!-- 主游戏区 -->
+  <main id="main">
+    <!-- 左侧 - 盲盒机 -->
+    <section class="machine-area">
+      <div class="machine-container" id="machineContainer">
+        <!-- 奥特曼装饰光环 -->
+        <div class="aura-ring" id="auraRing"></div>
+        <!-- 盲盒主体 -->
+        <div class="blind-box" id="blindBox">
+          <div class="box-front">
+            <div class="box-pattern">
+              <div class="ultraman-silhouette"></div>
+              <div class="color-timer" id="colorTimer"></div>
+            </div>
+            <span class="box-question">?</span>
+          </div>
+          <div class="box-glow"></div>
+        </div>
+        <!-- 平台 -->
+        <div class="platform"></div>
+      </div>
+
+      <!-- 抽奖按钮 -->
+      <button class="draw-btn" id="drawBtn">
+        <span class="draw-btn-text">✨ 消耗 <strong id="drawCost">10</strong> 积分抽取 ✨</span>
+        <span class="draw-btn-sub">点击开启神秘盲盒</span>
+      </button>
+    </section>
+
+    <!-- 右侧 - 奖品展示 -->
+    <section class="prize-area">
+      <h2 class="section-title">
+        <span class="title-deco">★</span> 可获奖励 <span class="title-deco">★</span>
+      </h2>
+      <div class="prize-grid" id="prizeGrid">
+        <!-- JS 动态生成 -->
+      </div>
+    </section>
+  </main>
+
+  <!-- 抽奖结果弹窗 -->
+  <div class="overlay" id="resultOverlay">
+    <div class="result-card" id="resultCard">
+      <div class="result-rarity" id="resultRarity"></div>
+      <div class="result-emoji" id="resultEmoji"></div>
+      <div class="result-name" id="resultName"></div>
+      <div class="result-stars" id="resultStars"></div>
+      <button class="result-close" id="resultClose">确 定</button>
+    </div>
+  </div>
+
+  <!-- 中奖粒子特效层 -->
+  <div class="effects-layer" id="effectsLayer"></div>
+
+  <!-- 历史记录侧边栏 -->
+  <div class="sidebar" id="historySidebar">
+    <div class="sidebar-header">
+      <h3>📋 抽奖记录</h3>
+      <button class="btn-close" id="btnHistoryClose">✕</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <p class="empty-hint">还没有抽奖记录，快来试试手气吧！</p>
+    </div>
+    <div class="history-stats" id="historyStats"></div>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div class="overlay" id="settingsOverlay">
+    <div class="settings-card">
+      <div class="settings-header">
+        <h3>⚙️ 游戏设置</h3>
+        <button class="btn-close" id="btnSettingsClose">✕</button>
+      </div>
+      <div class="settings-body">
+        <!-- 积分设置 -->
+        <div class="setting-group">
+          <h4>积分设置</h4>
+          <div class="setting-row">
+            <label>当前积分</label>
+            <input type="number" id="setPoints" min="0" max="99999" value="100">
+          </div>
+          <div class="setting-row">
+            <label>每次抽奖消耗</label>
+            <input type="number" id="setDrawCost" min="1" max="9999" value="10">
+          </div>
+          <div class="setting-row">
+            <label>每日签到奖励</label>
+            <input type="number" id="setDailyReward" min="1" max="9999" value="20">
+          </div>
+        </div>
+        <!-- 奖品设置 -->
+        <div class="setting-group">
+          <h4>奖品池设置</h4>
+          <div class="gift-list" id="giftSettingsList">
+            <!-- JS 动态生成 -->
+          </div>
+          <button class="btn-add-gift" id="btnAddGift">+ 添加奖品</button>
+        </div>
+        <!-- 概率预览 -->
+        <div class="setting-group">
+          <h4>概率预览</h4>
+          <div class="prob-chart" id="probChart"></div>
+        </div>
+      </div>
+      <div class="settings-footer">
+        <button class="btn-secondary" id="btnResetDefault">恢复默认</button>
+        <button class="btn-primary" id="btnSaveSettings">保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 签到动画 -->
+  <div class="overlay" id="dailyOverlay">
+    <div class="daily-card">
+      <div class="daily-emoji">🎁</div>
+      <div class="daily-title">签到成功！</div>
+      <div class="daily-points">+<span id="dailyRewardAmount">20</span> ⚡</div>
+      <button class="result-close" id="dailyClose">太棒了！</button>
+    </div>
+  </div>
+
+  <script src="js/game.js"></script>
+</body>
+</html>
