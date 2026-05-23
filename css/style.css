@@ -964,11 +964,70 @@ body {
 
 /* ===== 响应式 ===== */
 @media (max-width: 768px) {
+  /* --- 头部重构 --- */
+  #header {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .logo {
+    gap: 4px;
+    order: 1;
+  }
+
+  .logo-text {
+    font-size: 15px;
+    letter-spacing: 1px;
+  }
+
+  .logo-icon {
+    font-size: 22px;
+  }
+
+  .sync-status {
+    display: none;  /* 手机端隐藏文字，用header高度区分 */
+  }
+
+  .points-display {
+    order: 2;
+    padding: 4px 10px;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .points-label {
+    font-size: 11px;
+  }
+
+  .points-value {
+    font-size: 16px;
+  }
+
+  .header-actions {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .btn-icon {
+    padding: 5px 8px;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+
+  .btn-nav {
+    font-size: 10px;
+    padding: 5px 6px;
+  }
+
   #main {
     flex-direction: column;
     align-items: center;
     gap: 30px;
-    padding-top: calc(var(--header-h) + 20px);
+    padding-top: 100px;
   }
 
   .machine-container {
@@ -996,8 +1055,23 @@ body {
     width: 100vw;
     right: -100vw;
   }
+}
 
-  .header-actions { gap: 4px; }
-  .btn-icon { padding: 6px 10px; font-size: 12px; }
-  .logo-text { font-size: 16px; }
+@media (max-width: 400px) {
+  .btn-icon {
+    font-size: 14px;    /* emoji 当按钮文字 */
+    padding: 6px 8px;
+    min-width: 32px;
+  }
+
+  .btn-nav {
+    font-size: 13px;
+    padding: 6px 7px;
+  }
+
+  /* 超小屏隐藏按钮中文，靠 emoji 辨识 */
+  .btn-icon:not(.btn-nav) {
+    font-size: 15px;
+    padding: 6px 8px;
+  }
 }
