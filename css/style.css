@@ -916,6 +916,31 @@ body {
 
 .btn-secondary:hover { background: rgba(255,255,255,0.15); }
 
+.backup-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-backup {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  color: #ddd;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+
+.btn-backup:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: var(--ultra-gold);
+  box-shadow: 0 4px 12px rgba(255,215,0,0.15);
+}
+
 /* ===== 签到弹窗 ===== */
 .daily-card {
   background: linear-gradient(145deg, #1a1a3e, #0f0f28);

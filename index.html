@@ -132,6 +132,17 @@
           <div class="prob-chart" id="probChart"></div>
         </div>
       </div>
+      <!-- 数据备份 -->
+      <div class="setting-group">
+        <h4>💾 全量数据备份</h4>
+        <p style="font-size:12px;color:#888;margin-bottom:10px;">包含积分、奖品配置、抽奖记录、任务数据</p>
+        <div class="backup-actions">
+          <button class="btn-backup" id="btnExportAll">📤 导出备份</button>
+          <button class="btn-backup" id="btnImportAll">📥 恢复备份</button>
+          <input type="file" id="importAllFile" accept=".json" style="display:none;">
+        </div>
+        <p style="font-size:11px;color:#666;margin-top:8px;" id="lastBackupTimeBlind">未备份</p>
+      </div>
       <div class="settings-footer">
         <button class="btn-secondary" id="btnResetDefault">恢复默认</button>
         <button class="btn-primary" id="btnSaveSettings">保存设置</button>

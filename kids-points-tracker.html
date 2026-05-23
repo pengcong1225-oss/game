@@ -633,9 +633,9 @@
         <div class="panel" style="margin-bottom: 20px; padding: 15px 25px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="color: #8892b0;">💾 数据管理：</span>
-                    <button class="btn btn-success btn-small" onclick="exportData()">📤 导出数据</button>
-                    <button class="btn btn-primary btn-small" onclick="document.getElementById('importFile').click()">📥 导入数据</button>
+                    <span style="color: #8892b0;">💾 全量备份：</span>
+                    <button class="btn btn-success btn-small" onclick="exportData()">📤 导出备份</button>
+                    <button class="btn btn-primary btn-small" onclick="document.getElementById('importFile').click()">📥 恢复备份</button>
                     <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(event)">
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -1202,24 +1202,29 @@
 
         // ========== 数据导出/导入功能 ==========
         
-        // 导出数据为JSON文件
+        // 导出数据为JSON文件（全量备份）
         function exportData() {
+            const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
             const data = {
-                version: '1.0',
+                version: '2.0',
                 exportTime: new Date().toISOString(),
-                goals: goals,
-                records: records,
-                settings: settings
+                sharedPoints: getSharedPoints(),
+                blindBox: blindBoxData,
+                tracker: {
+                    goals: goals,
+                    records: records,
+                    settings: settings
+                }
             };
-            
+
             const jsonStr = JSON.stringify(data, null, 2);
             const blob = new Blob([jsonStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            
+
             const date = new Date();
             const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
-            const filename = `积分记录_${dateStr}.json`;
-            
+            const filename = `全量备份_${dateStr}.json`;
+
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
@@ -1227,61 +1232,87 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
-            // 更新备份时间显示
+
             document.getElementById('lastBackupTime').textContent = `上次导出: ${date.toLocaleString('zh-CN')}`;
             localStorage.setItem('lastBackupTime', date.toISOString());
-            
+
             showSuccess('📤');
         }
 
-        // 导入数据
+        // 导入数据（支持 v1.0 和 v2.0 全量备份）
         function importData(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
-                    
-                    // 验证数据格式
-                    if (!data.goals || !data.records || !data.settings) {
+
+                    if (data.version === '2.0' && data.tracker) {
+                        // v2.0 全量备份
+                        const totalEarned = data.tracker.records.reduce((sum, r) => sum + r.points, 0);
+
+                        const confirmMsg = `确定要导入全量备份吗？\n\n` +
+                            `📁 文件: ${file.name}\n` +
+                            `📅 备份时间: ${data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知'}\n` +
+                            `⭐ 可用积分: ${data.sharedPoints ?? 0}\n` +
+                            `📋 任务目标数: ${data.tracker.goals.length}\n` +
+                            `📝 任务记录数: ${data.tracker.records.length}\n` +
+                            `🎁 盲盒数据: ${data.blindBox ? '包含' : '无'}\n\n` +
+                            `⚠️ 这将覆盖当前所有数据！`;
+
+                        if (!confirm(confirmMsg)) { event.target.value = ''; return; }
+
+                        // 恢复共享积分
+                        if (data.sharedPoints !== null && data.sharedPoints !== undefined) {
+                            setSharedPoints(data.sharedPoints);
+                        } else {
+                            setSharedPoints(totalEarned);
+                        }
+
+                        // 恢复任务数据
+                        goals = data.tracker.goals;
+                        records = data.tracker.records;
+                        settings = data.tracker.settings;
+
+                        // 恢复盲盒数据
+                        if (data.blindBox) {
+                            localStorage.setItem('ultraman-blindbox', JSON.stringify(data.blindBox));
+                        }
+
+                    } else if (data.goals && data.records && data.settings) {
+                        // v1.0 旧版任务数据（向后兼容）
+                        const totalEarned = data.records.reduce((sum, r) => sum + r.points, 0);
+
+                        const confirmMsg = `确定要导入数据吗？\n\n` +
+                            `📁 文件: ${file.name}\n` +
+                            `📋 目标数: ${data.goals.length}\n` +
+                            `📝 记录数: ${data.records.length}\n` +
+                            `⭐ 总积分: ${totalEarned}\n\n` +
+                            `⚠️ 这将覆盖当前任务数据！`;
+
+                        if (!confirm(confirmMsg)) { event.target.value = ''; return; }
+
+                        goals = data.goals;
+                        records = data.records;
+                        settings = data.settings;
+                        setSharedPoints(totalEarned);
+                    } else {
                         alert('❌ 无效的数据文件格式！');
-                        return;
-                    }
-                    
-                    // 确认导入
-                    const confirmMsg = `确定要导入数据吗？\n\n` +
-                        `📁 文件: ${file.name}\n` +
-                        `📋 目标数: ${data.goals.length}\n` +
-                        `📝 记录数: ${data.records.length}\n` +
-                        `⭐ 总积分: ${data.records.reduce((sum, r) => sum + r.points, 0)}\n\n` +
-                        `⚠️ 这将覆盖当前所有数据！`;
-                    
-                    if (!confirm(confirmMsg)) {
                         event.target.value = '';
                         return;
                     }
-                    
-                    // 导入数据
-                    goals = data.goals;
-                    records = data.records;
-                    settings = data.settings;
-
-                    // 同步共享积分（累计获得 = 可用积分）
-                    const totalEarned = records.reduce((sum, r) => sum + r.points, 0);
-                    setSharedPoints(totalEarned);
 
                     // 保存并刷新
                     saveData();
                     renderGoals();
                     renderRecords();
                     updateStats();
-                    
+
                     showSuccess('📥');
                     alert('✅ 数据导入成功！');
-                    
+
                 } catch (err) {
                     alert('❌ 文件解析失败，请确保是有效的JSON文件！\n\n错误: ' + err.message);
                 }

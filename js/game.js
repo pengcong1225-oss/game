@@ -541,6 +541,118 @@ function bindEvents() {
     window.location.href = 'kids-points-tracker.html';
   });
 
+  // ===== 全量备份 =====
+  function exportAllData() {
+    const trackerGoals = JSON.parse(localStorage.getItem('pointsGoals') || 'null');
+    const trackerRecords = JSON.parse(localStorage.getItem('pointsRecords') || 'null');
+    const trackerSettings = JSON.parse(localStorage.getItem('pointsSettings') || 'null');
+    const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
+    const sharedPoints = getSharedPoints();
+
+    const data = {
+      version: '2.0',
+      exportTime: new Date().toISOString(),
+      sharedPoints: sharedPoints,
+      blindBox: blindBoxData,
+      tracker: {
+        goals: trackerGoals || [],
+        records: trackerRecords || [],
+        settings: trackerSettings || { targetPoints: 100, rewardText: '神秘奖励' }
+      }
+    };
+
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const date = new Date();
+    const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `全量备份_${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    localStorage.setItem('lastBackupTime', date.toISOString());
+    updateBackupTimeDisplay();
+  }
+
+  function updateBackupTimeDisplay() {
+    const el = $('#lastBackupTimeBlind');
+    if (!el) return;
+    const lastTime = localStorage.getItem('lastBackupTime');
+    if (lastTime) {
+      el.textContent = `上次备份: ${new Date(lastTime).toLocaleString('zh-CN')}`;
+    } else {
+      el.textContent = '未备份';
+    }
+  }
+
+  function importAllData(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = JSON.parse(e.target.result);
+
+        if (data.version !== '2.0' || !data.tracker) {
+          alert('❌ 无效的全量备份文件格式！请使用从本系统导出的备份文件。');
+          return;
+        }
+
+        const trackerRecords = data.tracker.records || [];
+        const totalEarned = trackerRecords.reduce((sum, r) => sum + r.points, 0);
+
+        const confirmMsg = `确定要恢复全量备份吗？\n\n` +
+          `📅 备份时间: ${data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知'}\n` +
+          `⭐ 可用积分: ${data.sharedPoints ?? 0}\n` +
+          `📋 任务目标数: ${(data.tracker.goals || []).length}\n` +
+          `📝 任务记录数: ${trackerRecords.length}\n` +
+          `🎁 盲盒数据: ${data.blindBox ? '包含' : '无'}\n\n` +
+          `⚠️ 这将覆盖当前所有数据！`;
+
+        if (!confirm(confirmMsg)) return;
+
+        // 恢复共享积分
+        if (data.sharedPoints !== null && data.sharedPoints !== undefined) {
+          setSharedPoints(data.sharedPoints);
+        } else {
+          setSharedPoints(totalEarned);
+        }
+
+        // 恢复盲盒数据
+        if (data.blindBox) {
+          localStorage.setItem('ultraman-blindbox', JSON.stringify(data.blindBox));
+        }
+
+        // 恢复任务数据
+        if (data.tracker.goals) localStorage.setItem('pointsGoals', JSON.stringify(data.tracker.goals));
+        if (data.tracker.records) localStorage.setItem('pointsRecords', JSON.stringify(data.tracker.records));
+        if (data.tracker.settings) localStorage.setItem('pointsSettings', JSON.stringify(data.tracker.settings));
+
+        alert('✅ 数据恢复成功！页面将刷新以应用更改。');
+        location.reload();
+      } catch (err) {
+        alert('❌ 文件解析失败，请确保是有效的JSON文件！\n\n错误: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  $('#btnExportAll').addEventListener('click', exportAllData);
+  $('#btnImportAll').addEventListener('click', () => {
+    $('#importAllFile').click();
+  });
+  $('#importAllFile').addEventListener('change', (e) => {
+    if (e.target.files[0]) {
+      importAllData(e.target.files[0]);
+      e.target.value = '';
+    }
+  });
+
+  updateBackupTimeDisplay();
+
   // 每日签到
   $('#btnDaily').addEventListener('click', () => {
     const today = new Date().toDateString();
