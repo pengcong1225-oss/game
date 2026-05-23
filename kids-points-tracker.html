@@ -599,6 +599,10 @@
         <div class="header">
             <h1>🏆 小小英雄积分榜</h1>
             <p>每一次努力，都是成长的足迹 ✨</p>
+            <a href="index.html" style="display: inline-block; margin-top: 16px; padding: 10px 28px; background: linear-gradient(135deg, #E0001D, #B8001A); color: #fff; text-decoration: none; border-radius: 25px; font-weight: 700; font-size: 0.95rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(224,0,29,0.4);"
+               onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(224,0,29,0.55)';"
+               onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(224,0,29,0.4)';"
+            >🎮 去盲盒抽奖</a>
         </div>
 
         <!-- 统计卡片 -->
@@ -606,7 +610,7 @@
             <div class="stat-card">
                 <div class="stat-icon">⭐</div>
                 <div class="stat-value" id="totalPoints">0</div>
-                <div class="stat-label">总积分</div>
+                <div class="stat-label">可用积分</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">🎯</div>
@@ -636,6 +640,8 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="color: #8892b0; font-size: 0.85rem;" id="lastBackupTime">未备份</span>
+                    <span style="color: #8892b0;">|</span>
+                    <span style="color: #f39c12; font-size: 0.85rem;">📊 累计获得: <strong id="totalEarnedDisplay">0</strong></span>
                 </div>
             </div>
         </div>
@@ -788,9 +794,32 @@
             rewardText: '神秘奖励'
         };
 
+        // ===== 共享积分 =====
+        const SHARED_POINTS_KEY = 'sharedPoints';
+
+        function getSharedPoints() {
+            const val = localStorage.getItem(SHARED_POINTS_KEY);
+            if (val === null) return null;
+            const num = parseInt(val, 10);
+            return isNaN(num) ? null : num;
+        }
+
+        function setSharedPoints(val) {
+            localStorage.setItem(SHARED_POINTS_KEY, String(Math.max(0, val)));
+        }
+
+        function syncSharedPointsFromRecords() {
+            // If no sharedPoints yet, calculate from existing records
+            if (getSharedPoints() === null) {
+                const total = records.reduce((sum, r) => sum + r.points, 0);
+                setSharedPoints(total);
+            }
+        }
+
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadData();
+            syncSharedPointsFromRecords();
             renderGoals();
             renderRecords();
             updateStats();
@@ -963,9 +992,12 @@
 
         // 更新统计
         function updateStats() {
-            const totalPoints = records.reduce((sum, r) => sum + r.points, 0);
-            document.getElementById('totalPoints').textContent = totalPoints;
+            const totalEarned = records.reduce((sum, r) => sum + r.points, 0);
+            const sharedPoints = getSharedPoints();
+            const availablePoints = sharedPoints !== null ? sharedPoints : totalEarned;
+            document.getElementById('totalPoints').textContent = availablePoints;
             document.getElementById('totalTasks').textContent = records.length;
+            document.getElementById('totalEarnedDisplay').textContent = totalEarned;
 
             // 今日积分
             const today = new Date().toDateString();
@@ -978,13 +1010,16 @@
             const streak = calculateStreak();
             document.getElementById('streak').textContent = streak;
 
-            // 进度条
-            const progress = Math.min((totalPoints / settings.targetPoints) * 100, 100);
+            // 进度条 - 使用可用积分（共享积分）
+            const sharedPoints = getSharedPoints();
+            const totalEarned2 = records.reduce((sum, r) => sum + r.points, 0);
+            const availablePoints = sharedPoints !== null ? sharedPoints : totalEarned2;
+            const progress = Math.min((availablePoints / settings.targetPoints) * 100, 100);
             document.getElementById('progressFill').style.width = progress + '%';
             document.getElementById('progressPercent').textContent = Math.round(progress) + '%';
-            document.getElementById('progressText').textContent = progress >= 100 
-                ? '🎉 已达成目标！' 
-                : `距离「${settings.rewardText}」还需 ${settings.targetPoints - totalPoints} 积分`;
+            document.getElementById('progressText').textContent = progress >= 100
+                ? '🎉 已达成目标！'
+                : `距离「${settings.rewardText}」还需 ${settings.targetPoints - availablePoints} 积分`;
 
             // 更新任务选择下拉框
             const select = document.getElementById('taskSelect');
@@ -1104,10 +1139,17 @@
             };
 
             records.push(record);
+            addPointsToShared(goal.points);
             saveData();
             renderRecords();
             updateStats();
             showSuccess('✅');
+        }
+
+        function addPointsToShared(amount) {
+            const current = getSharedPoints();
+            const base = current !== null ? current : 0;
+            setSharedPoints(base + amount);
         }
 
         // 保存记录
@@ -1131,6 +1173,7 @@
             };
 
             records.push(record);
+            addPointsToShared(goal.points);
             saveData();
             renderRecords();
             updateStats();
@@ -1225,7 +1268,11 @@
                     goals = data.goals;
                     records = data.records;
                     settings = data.settings;
-                    
+
+                    // 同步共享积分（累计获得 = 可用积分）
+                    const totalEarned = records.reduce((sum, r) => sum + r.points, 0);
+                    setSharedPoints(totalEarned);
+
                     // 保存并刷新
                     saveData();
                     renderGoals();

@@ -20,6 +20,20 @@ const RARITY_CONFIG = {
   legendary: { label: '传说', color: '#FFD700', stars: '🌟🌟🌟🌟🌟' },
 };
 
+// ===== 共享积分 =====
+const SHARED_POINTS_KEY = 'sharedPoints';
+
+function getSharedPoints() {
+  const val = localStorage.getItem(SHARED_POINTS_KEY);
+  if (val === null) return DEFAULT_POINTS;
+  const num = parseInt(val, 10);
+  return isNaN(num) ? DEFAULT_POINTS : num;
+}
+
+function setSharedPoints(val) {
+  localStorage.setItem(SHARED_POINTS_KEY, String(Math.max(0, val)));
+}
+
 // ===== 游戏状态 =====
 let gameState = {
   points: DEFAULT_POINTS,
@@ -64,8 +78,8 @@ const dom = {
 
 // ===== 本地存储 =====
 function saveState() {
+  setSharedPoints(gameState.points);
   localStorage.setItem('ultraman-blindbox', JSON.stringify({
-    points: gameState.points,
     drawCost: gameState.drawCost,
     dailyReward: gameState.dailyReward,
     gifts: gameState.gifts,
@@ -75,11 +89,11 @@ function saveState() {
 }
 
 function loadState() {
+  gameState.points = getSharedPoints();
   const raw = localStorage.getItem('ultraman-blindbox');
   if (!raw) return;
   try {
     const saved = JSON.parse(raw);
-    gameState.points = saved.points ?? DEFAULT_POINTS;
     gameState.drawCost = saved.drawCost ?? DEFAULT_DRAW_COST;
     gameState.dailyReward = saved.dailyReward ?? DEFAULT_DAILY_REWARD;
     gameState.gifts = saved.gifts ?? JSON.parse(JSON.stringify(DEFAULT_GIFTS));
@@ -487,6 +501,7 @@ function bindEvents() {
     gameState.points = parseInt($('#setPoints').value) || 0;
     gameState.drawCost = parseInt($('#setDrawCost').value) || 1;
     gameState.dailyReward = parseInt($('#setDailyReward').value) || 0;
+    setSharedPoints(gameState.points);
     saveState();
     updateAllUI();
     renderGiftSettings();
@@ -496,8 +511,7 @@ function bindEvents() {
 
   // 恢复默认
   $('#btnResetDefault').addEventListener('click', () => {
-    if (!confirm('确定要恢复默认设置吗？当前数据将被覆盖。')) return;
-    gameState.points = DEFAULT_POINTS;
+    if (!confirm('确定要恢复默认设置吗？奖品池和抽奖记录将被重置，积分保持不变。')) return;
     gameState.drawCost = DEFAULT_DRAW_COST;
     gameState.dailyReward = DEFAULT_DAILY_REWARD;
     gameState.gifts = JSON.parse(JSON.stringify(DEFAULT_GIFTS));
@@ -520,6 +534,11 @@ function bindEvents() {
     });
     renderGiftSettings();
     bindGiftSettingsEvents();
+  });
+
+  // 跳转到任务积分页
+  $('#btnGoTracker').addEventListener('click', () => {
+    window.location.href = 'kids-points-tracker.html';
   });
 
   // 每日签到
