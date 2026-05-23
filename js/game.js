@@ -76,16 +76,27 @@ const dom = {
   bgCanvas: $('#bgCanvas'),
 };
 
-// ===== 本地存储 =====
+// ===== 本地存储 + 服务端同步 =====
 function saveState() {
   setSharedPoints(gameState.points);
-  localStorage.setItem('ultraman-blindbox', JSON.stringify({
+  const blindBoxData = {
     drawCost: gameState.drawCost,
     dailyReward: gameState.dailyReward,
     gifts: gameState.gifts,
     history: gameState.history.slice(-50),
     lastDailyDate: gameState.lastDailyDate,
-  }));
+  };
+  localStorage.setItem('ultraman-blindbox', JSON.stringify(blindBoxData));
+
+  const trackerGoals = JSON.parse(localStorage.getItem('pointsGoals') || 'null');
+  const trackerRecords = JSON.parse(localStorage.getItem('pointsRecords') || 'null');
+  const trackerSettings = JSON.parse(localStorage.getItem('pointsSettings') || 'null');
+  const fullData = buildFullData(gameState.points, blindBoxData, {
+    goals: trackerGoals,
+    records: trackerRecords,
+    settings: trackerSettings,
+  });
+  apiSaveData(fullData).then(() => updateSyncIndicator());
 }
 
 function loadState() {
@@ -686,8 +697,10 @@ function bindEvents() {
 }
 
 // ===== 初始化 =====
-function init() {
+async function init() {
+  await initApiSync();
   loadState();
+  updateSyncIndicator();
   initBackgroundParticles();
   updateAllUI();
   bindEvents();

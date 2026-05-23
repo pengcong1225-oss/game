@@ -597,7 +597,7 @@
     <div class="container">
         <!-- 标题 -->
         <div class="header">
-            <h1>🏆 小小英雄积分榜</h1>
+            <h1>🏆 小小英雄积分榜 <span id="syncStatus" style="font-size:0.4em;vertical-align:middle;"></span></h1>
             <p>每一次努力，都是成长的足迹 ✨</p>
             <a href="index.html" style="display: inline-block; margin-top: 16px; padding: 10px 28px; background: linear-gradient(135deg, #E0001D, #B8001A); color: #fff; text-decoration: none; border-radius: 25px; font-weight: 700; font-size: 0.95rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(224,0,29,0.4);"
                onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(224,0,29,0.55)';"
@@ -785,6 +785,7 @@
         </div>
     </div>
 
+    <script src="js/api.js"></script>
     <script>
         // 数据存储
         let goals = [];
@@ -817,9 +818,11 @@
         }
 
         // 初始化
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
+            await initApiSync();
             loadData();
             syncSharedPointsFromRecords();
+            updateSyncIndicator();
             renderGoals();
             renderRecords();
             updateStats();
@@ -861,11 +864,20 @@
             document.getElementById('completeTime').value = localTime.toISOString().slice(0, 16);
         }
 
-        // 本地存储
+        // 本地存储 + 服务端同步
         function saveData() {
             localStorage.setItem('pointsGoals', JSON.stringify(goals));
             localStorage.setItem('pointsRecords', JSON.stringify(records));
             localStorage.setItem('pointsSettings', JSON.stringify(settings));
+
+            const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
+            const sharedPoints = getSharedPoints();
+            const fullData = buildFullData(sharedPoints, blindBoxData, {
+                goals: goals,
+                records: records,
+                settings: settings,
+            });
+            apiSaveData(fullData).then(() => updateSyncIndicator());
         }
 
         function loadData() {

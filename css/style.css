@@ -154,6 +154,13 @@ body {
   box-shadow: 0 4px 12px rgba(46,204,113,0.25);
 }
 
+.sync-status {
+  font-size: 11px;
+  margin-left: 8px;
+  opacity: 0.7;
+  font-weight: 400;
+}
+
 /* ===== 主游戏区 ===== */
 #main {
   display: flex;
