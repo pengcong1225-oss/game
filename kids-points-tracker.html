@@ -818,11 +818,10 @@
         }
 
         // 初始化
-        document.addEventListener('DOMContentLoaded', async function() {
-            await initApiSync();
+        document.addEventListener('DOMContentLoaded', function() {
+            // 立即从 localStorage 加载，页面秒开
             loadData();
             syncSharedPointsFromRecords();
-            updateSyncIndicator();
             renderGoals();
             renderRecords();
             updateStats();
@@ -830,6 +829,17 @@
             initIconPicker();
             setDefaultDateTime();
             restoreBackupTime();
+            updateSyncIndicator();
+
+            // 后台同步服务器数据（不阻塞）
+            initApiSync().then(() => {
+                loadData();
+                syncSharedPointsFromRecords();
+                updateSyncIndicator();
+                renderGoals();
+                renderRecords();
+                updateStats();
+            });
         });
 
         // 创建星星背景

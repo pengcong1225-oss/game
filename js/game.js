@@ -697,13 +697,19 @@ function bindEvents() {
 }
 
 // ===== 初始化 =====
-async function init() {
-  await initApiSync();
+function init() {
+  // 立即从 localStorage 加载，页面秒开
   loadState();
-  updateSyncIndicator();
   initBackgroundParticles();
   updateAllUI();
   bindEvents();
+
+  // 后台同步服务器数据（不阻塞）
+  initApiSync().then(() => {
+    loadState();
+    updateSyncIndicator();
+    updateAllUI();
+  });
 }
 
 init();

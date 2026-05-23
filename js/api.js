@@ -1,13 +1,23 @@
 // ===== 服务端数据同步 =====
-const API_BASE = window.location.origin;
-const DATA_URL = API_BASE + '/api/data';
+const API_BASE = window.location.origin || '';
+const DATA_URL = API_BASE ? (API_BASE + '/api/data') : '/api/data';
 
 let serverAvailable = false;
-let syncTimer = null;
+
+// 安全的超时 fetch（兼容旧浏览器）
+function fetchWithTimeout(url, options, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    fetch(url, { ...options, signal: controller.signal })
+      .then(res => { clearTimeout(timer); resolve(res); })
+      .catch(err => { clearTimeout(timer); reject(err); });
+  });
+}
 
 async function apiGetData() {
   try {
-    const res = await fetch(DATA_URL, { signal: AbortSignal.timeout(3000) });
+    const res = await fetchWithTimeout(DATA_URL, {}, 3000);
     if (!res.ok) throw new Error('Server error: ' + res.status);
     serverAvailable = true;
     return await res.json();
@@ -20,21 +30,18 @@ async function apiGetData() {
 
 async function apiSaveData(data) {
   try {
-    const res = await fetch(DATA_URL, {
+    const res = await fetchWithTimeout(DATA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-      signal: AbortSignal.timeout(3000),
-    });
+    }, 3000);
     if (!res.ok) throw new Error('Server error: ' + res.status);
     serverAvailable = true;
-    // 同时存一份到 localStorage 作为离线缓存
     localStorage.setItem('offlineCache', JSON.stringify(data));
     return true;
   } catch (e) {
     serverAvailable = false;
     console.warn('保存到服务器失败，存入本地缓存:', e.message);
-    // 服务器挂了也存本地，等恢复后再同步
     localStorage.setItem('offlineCache', JSON.stringify(data));
     return false;
   }
