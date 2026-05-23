@@ -1033,9 +1033,6 @@
             document.getElementById('streak').textContent = streak;
 
             // 进度条 - 使用可用积分（共享积分）
-            const sharedPoints = getSharedPoints();
-            const totalEarned2 = records.reduce((sum, r) => sum + r.points, 0);
-            const availablePoints = sharedPoints !== null ? sharedPoints : totalEarned2;
             const progress = Math.min((availablePoints / settings.targetPoints) * 100, 100);
             document.getElementById('progressFill').style.width = progress + '%';
             document.getElementById('progressPercent').textContent = Math.round(progress) + '%';
