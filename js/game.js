@@ -91,12 +91,14 @@ function saveState() {
   const trackerGoals = JSON.parse(localStorage.getItem('pointsGoals') || 'null');
   const trackerRecords = JSON.parse(localStorage.getItem('pointsRecords') || 'null');
   const trackerSettings = JSON.parse(localStorage.getItem('pointsSettings') || 'null');
-  const fullData = buildFullData(gameState.points, blindBoxData, {
-    goals: trackerGoals,
-    records: trackerRecords,
-    settings: trackerSettings,
-  });
-  apiSaveData(fullData).then(() => updateSyncIndicator());
+  if (typeof apiSaveData === 'function' && typeof buildFullData === 'function') {
+    const fullData = buildFullData(gameState.points, blindBoxData, {
+      goals: trackerGoals,
+      records: trackerRecords,
+      settings: trackerSettings,
+    });
+    apiSaveData(fullData).then(() => updateSyncIndicator());
+  }
 }
 
 function loadState() {
@@ -705,11 +707,13 @@ function init() {
   bindEvents();
 
   // 后台同步服务器数据（不阻塞）
-  initApiSync().then(() => {
-    loadState();
-    updateSyncIndicator();
-    updateAllUI();
-  });
+  if (typeof initApiSync === 'function') {
+    initApiSync().then(() => {
+      loadState();
+      updateSyncIndicator();
+      updateAllUI();
+    }).catch(() => {});
+  }
 }
 
 init();

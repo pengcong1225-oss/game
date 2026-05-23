@@ -785,7 +785,6 @@
         </div>
     </div>
 
-    <script src="js/api.js"></script>
     <script>
         // 数据存储
         let goals = [];
@@ -880,14 +879,16 @@
             localStorage.setItem('pointsRecords', JSON.stringify(records));
             localStorage.setItem('pointsSettings', JSON.stringify(settings));
 
-            const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
-            const sharedPoints = getSharedPoints();
-            const fullData = buildFullData(sharedPoints, blindBoxData, {
-                goals: goals,
-                records: records,
-                settings: settings,
-            });
-            apiSaveData(fullData).then(() => updateSyncIndicator());
+            if (typeof apiSaveData === 'function' && typeof buildFullData === 'function') {
+                const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
+                const sharedPoints = getSharedPoints();
+                const fullData = buildFullData(sharedPoints, blindBoxData, {
+                    goals: goals,
+                    records: records,
+                    settings: settings,
+                });
+                apiSaveData(fullData).then(() => updateSyncIndicator());
+            }
         }
 
         function loadData() {
@@ -1347,6 +1348,20 @@
                 const date = new Date(lastTime);
                 document.getElementById('lastBackupTime').textContent = `上次导出: ${date.toLocaleString('zh-CN')}`;
             }
+        }
+    </script>
+    <script src="js/api.js"></script>
+    <script>
+        // api.js 加载后启动后台同步（失败不影响主功能）
+        if (typeof initApiSync === 'function') {
+            initApiSync().then(() => {
+                loadData();
+                syncSharedPointsFromRecords();
+                updateSyncIndicator();
+                renderGoals();
+                renderRecords();
+                updateStats();
+            }).catch(() => {});
         }
     </script>
 </body>
