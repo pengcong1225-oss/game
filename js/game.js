@@ -1,4 +1,4 @@
-// ===== 默认配置 =====
+// ===== 默认配置（仅首次使用）=====
 const DEFAULT_GIFTS = [
   { id: 1, name: '能量金币', emoji: '🪙', rarity: 'common', probability: 40 },
   { id: 2, name: '光之水晶', emoji: '💎', rarity: 'common', probability: 25 },
@@ -11,7 +11,7 @@ const DEFAULT_GIFTS = [
 
 const DEFAULT_POINTS = 100;
 const DEFAULT_DRAW_COST = 10;
-const DEFAULT_DAILY_REWARD = 20;
+const DEFAULT_DAILY_REWARD = 1;
 
 const RARITY_CONFIG = {
   common: { label: '普通', color: '#9CA3AF', stars: '⭐' },
@@ -19,20 +19,6 @@ const RARITY_CONFIG = {
   epic: { label: '史诗', color: '#A855F7', stars: '⭐⭐⭐' },
   legendary: { label: '传说', color: '#FFD700', stars: '🌟🌟🌟🌟🌟' },
 };
-
-// ===== 共享积分 =====
-const SHARED_POINTS_KEY = 'sharedPoints';
-
-function getSharedPoints() {
-  const val = localStorage.getItem(SHARED_POINTS_KEY);
-  if (val === null) return DEFAULT_POINTS;
-  const num = parseInt(val, 10);
-  return isNaN(num) ? DEFAULT_POINTS : num;
-}
-
-function setSharedPoints(val) {
-  localStorage.setItem(SHARED_POINTS_KEY, String(Math.max(0, val)));
-}
 
 // ===== 游戏状态 =====
 let gameState = {
@@ -47,7 +33,6 @@ let gameState = {
 
 // ===== DOM 缓存 =====
 const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
 
 const dom = {
   pointsValue: $('#pointsValue'),
@@ -76,45 +61,30 @@ const dom = {
   bgCanvas: $('#bgCanvas'),
 };
 
-// ===== 本地存储 + 服务端同步 =====
+// ===== 数据读写（通过服务端）=====
+function loadState() {
+  const pts = getPoints();
+  gameState.points = (pts !== null && pts >= 0) ? pts : DEFAULT_POINTS;
+
+  const bb = getBlindBox();
+  if (bb) {
+    gameState.drawCost = bb.drawCost ?? DEFAULT_DRAW_COST;
+    gameState.dailyReward = bb.dailyReward ?? DEFAULT_DAILY_REWARD;
+    gameState.gifts = bb.gifts?.length ? bb.gifts : JSON.parse(JSON.stringify(DEFAULT_GIFTS));
+    gameState.history = bb.history ?? [];
+    gameState.lastDailyDate = bb.lastDailyDate ?? null;
+  }
+}
+
 function saveState() {
-  setSharedPoints(gameState.points);
-  const blindBoxData = {
+  setPoints(gameState.points);
+  saveBlindBox({
     drawCost: gameState.drawCost,
     dailyReward: gameState.dailyReward,
     gifts: gameState.gifts,
     history: gameState.history.slice(-50),
     lastDailyDate: gameState.lastDailyDate,
-  };
-  localStorage.setItem('ultraman-blindbox', JSON.stringify(blindBoxData));
-
-  const trackerGoals = JSON.parse(localStorage.getItem('pointsGoals') || 'null');
-  const trackerRecords = JSON.parse(localStorage.getItem('pointsRecords') || 'null');
-  const trackerSettings = JSON.parse(localStorage.getItem('pointsSettings') || 'null');
-  if (typeof apiSaveData === 'function' && typeof buildFullData === 'function') {
-    const fullData = buildFullData(gameState.points, blindBoxData, {
-      goals: trackerGoals,
-      records: trackerRecords,
-      settings: trackerSettings,
-    });
-    apiSaveData(fullData).then(() => updateSyncIndicator());
-  }
-}
-
-function loadState() {
-  gameState.points = getSharedPoints();
-  const raw = localStorage.getItem('ultraman-blindbox');
-  if (!raw) return;
-  try {
-    const saved = JSON.parse(raw);
-    gameState.drawCost = saved.drawCost ?? DEFAULT_DRAW_COST;
-    gameState.dailyReward = saved.dailyReward ?? DEFAULT_DAILY_REWARD;
-    gameState.gifts = saved.gifts ?? JSON.parse(JSON.stringify(DEFAULT_GIFTS));
-    gameState.history = saved.history ?? [];
-    gameState.lastDailyDate = saved.lastDailyDate ?? null;
-  } catch (e) {
-    console.warn('数据加载失败，使用默认配置');
-  }
+  });
 }
 
 // ===== 更新 UI =====
@@ -127,11 +97,7 @@ function updatePoints() {
 
 function updateDrawButton() {
   dom.drawCost.textContent = gameState.drawCost;
-  if (gameState.points < gameState.drawCost || gameState.isDrawing) {
-    dom.drawBtn.disabled = true;
-  } else {
-    dom.drawBtn.disabled = false;
-  }
+  dom.drawBtn.disabled = gameState.points < gameState.drawCost || gameState.isDrawing;
 }
 
 function updatePrizeGrid() {
@@ -184,9 +150,7 @@ function spawnParticles(x, y, count, color) {
   }
   dom.effectsLayer.appendChild(fragment);
   setTimeout(() => {
-    dom.effectsLayer.querySelectorAll('.particle').forEach(el => {
-      if (el.style.getPropertyValue('--dx') === '') el.remove();
-    });
+    dom.effectsLayer.querySelectorAll('.particle').forEach(el => el.remove());
   }, 1500);
 }
 
@@ -229,8 +193,9 @@ async function performDraw() {
   gameState.points -= gameState.drawCost;
   updatePoints();
   updateDrawButton();
+  saveState();
 
-  // 阶段1：盲盒震动
+  // 盲盒震动
   dom.blindBox.classList.add('shaking');
   dom.auraRing.classList.add('active');
   dom.colorTimer.style.animationDuration = '0.3s';
@@ -240,15 +205,13 @@ async function performDraw() {
   const gift = drawGift();
   const rarity = RARITY_CONFIG[gift.rarity];
 
-  // 阶段2：震动持续（紧张感）
   await sleep(1200);
 
-  // 阶段3：开盒闪光
+  // 开盒闪光
   dom.blindBox.classList.remove('shaking');
   dom.blindBox.classList.add('opening');
   dom.boxGlow.classList.add('flash');
 
-  // 阶段4：根据稀有度触发特效
   const boxRect = dom.blindBox.getBoundingClientRect();
   const cx = boxRect.left + boxRect.width / 2;
   const cy = boxRect.top + boxRect.height / 2;
@@ -262,24 +225,19 @@ async function performDraw() {
   if (gift.rarity === 'legendary') {
     spawnConfetti(80);
     screenShake();
-    // 额外的彩色粒子爆发
     setTimeout(() => spawnParticles(cx, cy, 30, '#FFD700'), 200);
     setTimeout(() => spawnParticles(cx, cy, 20, '#E0001D'), 400);
     setTimeout(() => spawnParticles(cx, cy, 20, '#00E5FF'), 600);
   }
 
-  // 阶段5：显示结果
   await sleep(500);
   showResult(gift);
 
   // 记录历史
-  gameState.history.unshift({
-    ...gift,
-    time: new Date().toISOString(),
-  });
+  gameState.history.unshift({ ...gift, time: new Date().toISOString() });
   if (gameState.history.length > 50) gameState.history.length = 50;
+  saveState();
 
-  // 恢复
   await sleep(300);
   dom.blindBox.classList.remove('opening');
   dom.boxGlow.classList.remove('flash');
@@ -290,7 +248,6 @@ async function performDraw() {
 
   gameState.isDrawing = false;
   updateDrawButton();
-  saveState();
 }
 
 function showResult(gift) {
@@ -336,7 +293,6 @@ function updateHistoryUI() {
     }).join('');
   }
 
-  // 统计
   const total = gameState.history.length;
   const legendary = gameState.history.filter(h => h.rarity === 'legendary').length;
   const epic = gameState.history.filter(h => h.rarity === 'epic').length;
@@ -448,7 +404,6 @@ function initBackgroundParticles() {
       ctx.fillStyle = `rgba(255,255,255,${p.opacity})`;
       ctx.fill();
 
-      // 连接线
       for (const p2 of particles) {
         const dx = p.x - p2.x;
         const dy = p.y - p2.y;
@@ -493,6 +448,11 @@ function bindEvents() {
     dom.historySidebar.classList.remove('open');
   });
 
+  // 跳转任务页
+  $('#btnGoTracker').addEventListener('click', () => {
+    window.location.href = 'kids-points-tracker.html';
+  });
+
   // 设置
   $('#btnSettings').addEventListener('click', () => {
     $('#setPoints').value = gameState.points;
@@ -514,7 +474,6 @@ function bindEvents() {
     gameState.points = parseInt($('#setPoints').value) || 0;
     gameState.drawCost = parseInt($('#setDrawCost').value) || 1;
     gameState.dailyReward = parseInt($('#setDailyReward').value) || 0;
-    setSharedPoints(gameState.points);
     saveState();
     updateAllUI();
     renderGiftSettings();
@@ -538,133 +497,10 @@ function bindEvents() {
   // 添加奖品
   $('#btnAddGift').addEventListener('click', () => {
     const newId = Math.max(0, ...gameState.gifts.map(g => g.id)) + 1;
-    gameState.gifts.push({
-      id: newId,
-      name: '新奖品',
-      emoji: '🎁',
-      rarity: 'common',
-      probability: 5,
-    });
+    gameState.gifts.push({ id: newId, name: '新奖品', emoji: '🎁', rarity: 'common', probability: 5 });
     renderGiftSettings();
     bindGiftSettingsEvents();
   });
-
-  // 跳转到任务积分页
-  $('#btnGoTracker').addEventListener('click', () => {
-    window.location.href = 'kids-points-tracker.html';
-  });
-
-  // ===== 全量备份 =====
-  function exportAllData() {
-    const trackerGoals = JSON.parse(localStorage.getItem('pointsGoals') || 'null');
-    const trackerRecords = JSON.parse(localStorage.getItem('pointsRecords') || 'null');
-    const trackerSettings = JSON.parse(localStorage.getItem('pointsSettings') || 'null');
-    const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
-    const sharedPoints = getSharedPoints();
-
-    const data = {
-      version: '2.0',
-      exportTime: new Date().toISOString(),
-      sharedPoints: sharedPoints,
-      blindBox: blindBoxData,
-      tracker: {
-        goals: trackerGoals || [],
-        records: trackerRecords || [],
-        settings: trackerSettings || { targetPoints: 100, rewardText: '神秘奖励' }
-      }
-    };
-
-    const jsonStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const date = new Date();
-    const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `全量备份_${dateStr}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    localStorage.setItem('lastBackupTime', date.toISOString());
-    updateBackupTimeDisplay();
-  }
-
-  function updateBackupTimeDisplay() {
-    const el = $('#lastBackupTimeBlind');
-    if (!el) return;
-    const lastTime = localStorage.getItem('lastBackupTime');
-    if (lastTime) {
-      el.textContent = `上次备份: ${new Date(lastTime).toLocaleString('zh-CN')}`;
-    } else {
-      el.textContent = '未备份';
-    }
-  }
-
-  function importAllData(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        const data = JSON.parse(e.target.result);
-
-        if (data.version !== '2.0' || !data.tracker) {
-          alert('❌ 无效的全量备份文件格式！请使用从本系统导出的备份文件。');
-          return;
-        }
-
-        const trackerRecords = data.tracker.records || [];
-        const totalEarned = trackerRecords.reduce((sum, r) => sum + r.points, 0);
-
-        const confirmMsg = `确定要恢复全量备份吗？\n\n` +
-          `📅 备份时间: ${data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知'}\n` +
-          `⭐ 可用积分: ${data.sharedPoints ?? 0}\n` +
-          `📋 任务目标数: ${(data.tracker.goals || []).length}\n` +
-          `📝 任务记录数: ${trackerRecords.length}\n` +
-          `🎁 盲盒数据: ${data.blindBox ? '包含' : '无'}\n\n` +
-          `⚠️ 这将覆盖当前所有数据！`;
-
-        if (!confirm(confirmMsg)) return;
-
-        // 恢复共享积分
-        if (data.sharedPoints !== null && data.sharedPoints !== undefined) {
-          setSharedPoints(data.sharedPoints);
-        } else {
-          setSharedPoints(totalEarned);
-        }
-
-        // 恢复盲盒数据
-        if (data.blindBox) {
-          localStorage.setItem('ultraman-blindbox', JSON.stringify(data.blindBox));
-        }
-
-        // 恢复任务数据
-        if (data.tracker.goals) localStorage.setItem('pointsGoals', JSON.stringify(data.tracker.goals));
-        if (data.tracker.records) localStorage.setItem('pointsRecords', JSON.stringify(data.tracker.records));
-        if (data.tracker.settings) localStorage.setItem('pointsSettings', JSON.stringify(data.tracker.settings));
-
-        alert('✅ 数据恢复成功！页面将刷新以应用更改。');
-        location.reload();
-      } catch (err) {
-        alert('❌ 文件解析失败，请确保是有效的JSON文件！\n\n错误: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  $('#btnExportAll').addEventListener('click', exportAllData);
-  $('#btnImportAll').addEventListener('click', () => {
-    $('#importAllFile').click();
-  });
-  $('#importAllFile').addEventListener('change', (e) => {
-    if (e.target.files[0]) {
-      importAllData(e.target.files[0]);
-      e.target.value = '';
-    }
-  });
-
-  updateBackupTimeDisplay();
 
   // 每日签到
   $('#btnDaily').addEventListener('click', () => {
@@ -687,6 +523,65 @@ function bindEvents() {
     if (e.target === dom.dailyOverlay) dom.dailyOverlay.classList.remove('show');
   });
 
+  // 全量导出
+  $('#btnExportAll').addEventListener('click', () => {
+    const data = getFullExportData();
+    if (!data) { alert('数据未加载'); return; }
+    data.exportTime = new Date().toISOString();
+    data.version = '2.0';
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const date = new Date();
+    const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `全量备份_${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // 全量导入
+  $('#btnImportAll').addEventListener('click', () => {
+    $('#importAllFile').click();
+  });
+  $('#importAllFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.blindBox && !data.tracker) {
+          alert('❌ 无效的备份文件格式！');
+          return;
+        }
+        const confirmMsg = `确定要恢复全量备份吗？\n\n` +
+          `📅 备份时间: ${data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知'}\n` +
+          `⭐ 可用积分: ${data.sharedPoints ?? '未知'}\n\n` +
+          `⚠️ 这将覆盖当前所有数据！`;
+        if (!confirm(confirmMsg)) { e.target.value = ''; return; }
+
+        const res = await fetch('/api/data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error('Server error');
+        alert('✅ 数据恢复成功！页面将刷新。');
+        location.reload();
+      } catch (err) {
+        alert('❌ 恢复失败: ' + err.message);
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  // 更新备份时间
+  $('#lastBackupTimeBlind').textContent = '数据已存储在服务器';
+
   // 键盘关闭
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -696,24 +591,29 @@ function bindEvents() {
       dom.dailyOverlay.classList.remove('show');
     }
   });
+
+  // 页面关闭前确保数据已保存
+  window.addEventListener('beforeunload', () => {
+    saveAppDataNow();
+  });
 }
 
 // ===== 初始化 =====
-function init() {
-  // 立即从 localStorage 加载，页面秒开
+async function init() {
+  try {
+    await loadAppData();
+    $('#syncStatus').textContent = '🟢 已连接';
+  } catch (e) {
+    console.error('服务器连接失败:', e.message);
+    $('#syncStatus').textContent = '🔴 未连接';
+    alert('⚠️ 无法连接到服务器，请确认服务器已启动。\n\n' + e.message);
+    return;
+  }
+
   loadState();
   initBackgroundParticles();
   updateAllUI();
   bindEvents();
-
-  // 后台同步服务器数据（不阻塞）
-  if (typeof initApiSync === 'function') {
-    initApiSync().then(() => {
-      loadState();
-      updateSyncIndicator();
-      updateAllUI();
-    }).catch(() => {});
-  }
 }
 
 init();

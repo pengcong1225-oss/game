@@ -785,60 +785,51 @@
         </div>
     </div>
 
+    <script src="js/api.js"></script>
     <script>
-        // 数据存储
+        // 数据存储（服务端 data.json 为唯一数据源）
         let goals = [];
         let records = [];
-        let settings = {
-            targetPoints: 100,
-            rewardText: '神秘奖励'
-        };
+        let settings = { targetPoints: 100, rewardText: '神秘奖励' };
 
-        // ===== 共享积分 =====
-        const SHARED_POINTS_KEY = 'sharedPoints';
+        // 从服务端数据层加载
+        function loadData() {
+            const pts = getPoints();
+            const points = (pts !== null && pts >= 0) ? pts : 0;
 
-        function getSharedPoints() {
-            const val = localStorage.getItem(SHARED_POINTS_KEY);
-            if (val === null) return null;
-            const num = parseInt(val, 10);
-            return isNaN(num) ? null : num;
-        }
-
-        function setSharedPoints(val) {
-            localStorage.setItem(SHARED_POINTS_KEY, String(Math.max(0, val)));
-        }
-
-        function syncSharedPointsFromRecords() {
-            // If no sharedPoints yet, calculate from existing records
-            if (getSharedPoints() === null) {
-                const total = records.reduce((sum, r) => sum + r.points, 0);
-                setSharedPoints(total);
+            const tracker = getTracker();
+            if (tracker) {
+                goals = tracker.goals?.length ? tracker.goals : [];
+                records = tracker.records || [];
+                settings = tracker.settings || { targetPoints: 100, rewardText: '神秘奖励' };
             }
         }
 
-        // 初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            // 立即从 localStorage 加载，页面秒开
+        // 保存到服务端
+        function saveData() {
+            if (typeof saveTracker === 'function') {
+                saveTracker({ goals: goals, records: records, settings: settings });
+            }
+        }
+
+        // 初始化（async，必须等待服务器数据加载）
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                await loadAppData();
+                document.getElementById('syncStatus').textContent = '🟢 已连接';
+            } catch (e) {
+                document.getElementById('syncStatus').textContent = '🔴 未连接';
+                alert('⚠️ 无法连接到服务器，请确认服务器已启动。\n\n' + e.message);
+                return;
+            }
             loadData();
-            syncSharedPointsFromRecords();
             renderGoals();
             renderRecords();
             updateStats();
             createStars();
             initIconPicker();
             setDefaultDateTime();
-            restoreBackupTime();
-            updateSyncIndicator();
-
-            // 后台同步服务器数据（不阻塞）
-            initApiSync().then(() => {
-                loadData();
-                syncSharedPointsFromRecords();
-                updateSyncIndicator();
-                renderGoals();
-                renderRecords();
-                updateStats();
-            });
+            document.getElementById('lastBackupTime').textContent = '数据已存储在服务器';
         });
 
         // 创建星星背景
@@ -873,68 +864,13 @@
             document.getElementById('completeTime').value = localTime.toISOString().slice(0, 16);
         }
 
-        // 本地存储 + 服务端同步
-        function saveData() {
-            localStorage.setItem('pointsGoals', JSON.stringify(goals));
-            localStorage.setItem('pointsRecords', JSON.stringify(records));
-            localStorage.setItem('pointsSettings', JSON.stringify(settings));
-
-            if (typeof apiSaveData === 'function' && typeof buildFullData === 'function') {
-                const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
-                const sharedPoints = getSharedPoints();
-                const fullData = buildFullData(sharedPoints, blindBoxData, {
-                    goals: goals,
-                    records: records,
-                    settings: settings,
-                });
-                apiSaveData(fullData).then(() => updateSyncIndicator());
-            }
-        }
-
-        function loadData() {
-            const savedGoals = localStorage.getItem('pointsGoals');
-            const savedRecords = localStorage.getItem('pointsRecords');
-            const savedSettings = localStorage.getItem('pointsSettings');
-
-            if (savedGoals) {
-                goals = JSON.parse(savedGoals);
-            } else {
-                // 预设示例目标
-                goals = [
-                    { id: 1, name: '阅读30分钟', points: 10, icon: '📚' },
-                    { id: 2, name: '完成作业', points: 15, icon: '✏️' },
-                    { id: 3, name: '整理房间', points: 8, icon: '🧹' },
-                    { id: 4, name: '运动30分钟', points: 12, icon: '🏃' },
-                    { id: 5, name: '练习钢琴', points: 10, icon: '🎹' },
-                    { id: 6, name: '帮助做家务', points: 8, icon: '🏠' },
-                    { id: 7, name: '早睡早起', points: 5, icon: '⏰' },
-                    { id: 8, name: '自己收拾书包', points: 5, icon: '🎒' }
-                ];
-            }
-
-            if (savedRecords) {
-                records = JSON.parse(savedRecords);
-            }
-
-            if (savedSettings) {
-                settings = JSON.parse(savedSettings);
-            }
-        }
-
         // 渲染目标列表
         function renderGoals() {
             const container = document.getElementById('goalList');
-            
             if (goals.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>还没有添加目标<br>点击上方按钮添加第一个目标吧！</p>
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📭</div><p>还没有添加目标<br>点击上方按钮添加第一个目标吧！</p></div>`;
                 return;
             }
-
             container.innerHTML = goals.map(goal => `
                 <div class="goal-item">
                     <div class="goal-info">
@@ -958,14 +894,9 @@
         function renderRecords() {
             const container = document.getElementById('recordList');
             let filteredRecords = [...records];
-
-            // 应用筛选
             const now = new Date();
             if (currentFilter === 'today') {
-                filteredRecords = records.filter(r => {
-                    const date = new Date(r.time);
-                    return date.toDateString() === now.toDateString();
-                });
+                filteredRecords = records.filter(r => new Date(r.time).toDateString() === now.toDateString());
             } else if (currentFilter === 'week') {
                 const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                 filteredRecords = records.filter(r => new Date(r.time) >= weekAgo);
@@ -973,39 +904,22 @@
                 const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                 filteredRecords = records.filter(r => new Date(r.time) >= monthAgo);
             }
-
-            // 按时间倒序排列
             filteredRecords.sort((a, b) => new Date(b.time) - new Date(a.time));
 
             if (filteredRecords.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📝</div>
-                        <p>暂无完成记录<br>完成任务后会在这里显示</p>
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📝</div><p>暂无完成记录<br>完成任务后会在这里显示</p></div>`;
                 return;
             }
-
             container.innerHTML = filteredRecords.map(record => {
                 const date = new Date(record.time);
                 const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
-                return `
-                    <div class="record-item">
-                        <div class="record-info">
-                            <span class="record-icon">${record.icon}</span>
-                            <div class="record-details">
-                                <h4>${record.name}</h4>
-                                <span class="record-date">${timeStr}${record.note ? ' · ' + record.note : ''}</span>
-                            </div>
-                        </div>
-                        <span class="record-points">+${record.points}</span>
-                    </div>
-                `;
+                return `<div class="record-item">
+                    <div class="record-info"><span class="record-icon">${record.icon}</span>
+                    <div class="record-details"><h4>${record.name}</h4><span class="record-date">${timeStr}${record.note ? ' · ' + record.note : ''}</span></div></div>
+                    <span class="record-points">+${record.points}</span></div>`;
             }).join('');
         }
 
-        // 筛选记录
         function filterRecords(filter, btn) {
             currentFilter = filter;
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -1016,100 +930,63 @@
         // 更新统计
         function updateStats() {
             const totalEarned = records.reduce((sum, r) => sum + r.points, 0);
-            const sharedPoints = getSharedPoints();
-            const availablePoints = sharedPoints !== null ? sharedPoints : totalEarned;
+            const pts = getPoints();
+            const availablePoints = (pts !== null && pts >= 0) ? pts : totalEarned;
             document.getElementById('totalPoints').textContent = availablePoints;
             document.getElementById('totalTasks').textContent = records.length;
             document.getElementById('totalEarnedDisplay').textContent = totalEarned;
 
-            // 今日积分
             const today = new Date().toDateString();
-            const todayPoints = records
-                .filter(r => new Date(r.time).toDateString() === today)
-                .reduce((sum, r) => sum + r.points, 0);
+            const todayPoints = records.filter(r => new Date(r.time).toDateString() === today).reduce((sum, r) => sum + r.points, 0);
             document.getElementById('todayPoints').textContent = todayPoints;
 
-            // 连续天数
             const streak = calculateStreak();
             document.getElementById('streak').textContent = streak;
 
-            // 进度条 - 使用可用积分（共享积分）
             const progress = Math.min((availablePoints / settings.targetPoints) * 100, 100);
             document.getElementById('progressFill').style.width = progress + '%';
             document.getElementById('progressPercent').textContent = Math.round(progress) + '%';
-            document.getElementById('progressText').textContent = progress >= 100
-                ? '🎉 已达成目标！'
-                : `距离「${settings.rewardText}」还需 ${settings.targetPoints - availablePoints} 积分`;
+            document.getElementById('progressText').textContent = progress >= 100 ? '🎉 已达成目标！' : `距离「${settings.rewardText}」还需 ${settings.targetPoints - availablePoints} 积分`;
 
-            // 更新任务选择下拉框
             const select = document.getElementById('taskSelect');
-            select.innerHTML = '<option value="">请选择...</option>' + 
-                goals.map(g => `<option value="${g.id}">${g.icon} ${g.name} (+${g.points})</option>`).join('');
+            select.innerHTML = '<option value="">请选择...</option>' + goals.map(g => `<option value="${g.id}">${g.icon} ${g.name} (+${g.points})</option>`).join('');
         }
 
-        // 计算连续天数
         function calculateStreak() {
             if (records.length === 0) return 0;
-            
             const dates = [...new Set(records.map(r => new Date(r.time).toDateString()))];
             dates.sort((a, b) => new Date(b) - new Date(a));
-            
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            let streak = 0;
-            let checkDate = new Date(today);
-            
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            let streak = 0, checkDate = new Date(today);
             for (let i = 0; i < dates.length; i++) {
-                const recordDate = new Date(dates[i]);
-                recordDate.setHours(0, 0, 0, 0);
-                
-                if (recordDate.getTime() === checkDate.getTime() || 
-                    recordDate.getTime() === checkDate.getTime() - 86400000) {
-                    streak++;
-                    checkDate = new Date(recordDate);
-                } else {
-                    break;
-                }
+                const recordDate = new Date(dates[i]); recordDate.setHours(0, 0, 0, 0);
+                if (recordDate.getTime() === checkDate.getTime() || recordDate.getTime() === checkDate.getTime() - 86400000) {
+                    streak++; checkDate = new Date(recordDate);
+                } else break;
             }
-            
             return streak;
         }
 
-        // 模态框操作
+        // 模态框
         function openGoalModal() {
             document.getElementById('goalModal').classList.add('active');
             document.getElementById('goalForm').reset();
             document.querySelectorAll('.icon-option').forEach(i => i.classList.remove('selected'));
             document.querySelector('.icon-option').classList.add('selected');
         }
-
-        function closeGoalModal() {
-            document.getElementById('goalModal').classList.remove('active');
-        }
-
+        function closeGoalModal() { document.getElementById('goalModal').classList.remove('active'); }
         function openCompleteModal() {
-            if (goals.length === 0) {
-                alert('请先添加目标！');
-                return;
-            }
+            if (goals.length === 0) { alert('请先添加目标！'); return; }
             document.getElementById('completeModal').classList.add('active');
             setDefaultDateTime();
         }
-
-        function closeCompleteModal() {
-            document.getElementById('completeModal').classList.remove('active');
-        }
-
+        function closeCompleteModal() { document.getElementById('completeModal').classList.remove('active'); }
         function openSettingsModal() {
             document.getElementById('settingsModal').classList.add('active');
             document.getElementById('targetPoints').value = settings.targetPoints;
             document.getElementById('rewardText').value = settings.rewardText;
         }
-
-        function closeSettingsModal() {
-            document.getElementById('settingsModal').classList.remove('active');
-        }
+        function closeSettingsModal() { document.getElementById('settingsModal').classList.remove('active'); }
 
         // 保存目标
         function saveGoal(e) {
@@ -1117,15 +994,7 @@
             const name = document.getElementById('goalName').value.trim();
             const points = parseInt(document.getElementById('goalPoints').value);
             const icon = document.querySelector('.icon-option.selected').dataset.icon;
-
-            const newGoal = {
-                id: Date.now(),
-                name,
-                points,
-                icon
-            };
-
-            goals.push(newGoal);
+            goals.push({ id: Date.now(), name, points, icon });
             saveData();
             renderGoals();
             updateStats();
@@ -1133,7 +1002,6 @@
             showSuccess('🎯');
         }
 
-        // 删除目标
         function deleteGoal(id) {
             if (confirm('确定要删除这个目标吗？')) {
                 goals = goals.filter(g => g.id !== id);
@@ -1143,57 +1011,32 @@
             }
         }
 
-        // 快速完成
+        // 快速完成任务（+积分到服务端）
         function quickComplete(goalId) {
             const goal = goals.find(g => g.id === goalId);
             if (!goal) return;
-
-            const record = {
-                id: Date.now(),
-                goalId: goal.id,
-                name: goal.name,
-                points: goal.points,
-                icon: goal.icon,
-                time: new Date().toISOString(),
-                note: ''
-            };
-
-            records.push(record);
-            addPointsToShared(goal.points);
+            if (typeof addTaskRecord === 'function') {
+                const record = addTaskRecord(goal);
+                records.push(record);
+            } else {
+                records.push({ id: Date.now(), goalId: goal.id, name: goal.name, points: goal.points, icon: goal.icon, time: new Date().toISOString(), note: '' });
+            }
             saveData();
             renderRecords();
             updateStats();
             showSuccess('✅');
         }
 
-        function addPointsToShared(amount) {
-            const current = getSharedPoints();
-            const base = current !== null ? current : 0;
-            setSharedPoints(base + amount);
-        }
-
-        // 保存记录
         function saveRecord(e) {
             e.preventDefault();
             const goalId = parseInt(document.getElementById('taskSelect').value);
             const goal = goals.find(g => g.id === goalId);
             if (!goal) return;
-
             const time = document.getElementById('completeTime').value;
             const note = document.getElementById('recordNote').value.trim();
-
-            const record = {
-                id: Date.now(),
-                goalId: goal.id,
-                name: goal.name,
-                points: goal.points,
-                icon: goal.icon,
-                time: new Date(time).toISOString(),
-                note
-            };
-
+            const record = { id: Date.now(), goalId: goal.id, name: goal.name, points: goal.points, icon: goal.icon, time: new Date(time).toISOString(), note };
             records.push(record);
-            addPointsToShared(goal.points);
+            if (typeof addPoints === 'function') addPoints(goal.points);
             saveData();
             renderRecords();
             updateStats();
@@ -1201,7 +1044,6 @@
             showSuccess('🎉');
         }
 
-        // 保存设置
         function saveSettings(e) {
             e.preventDefault();
             settings.targetPoints = parseInt(document.getElementById('targetPoints').value);
@@ -1211,7 +1053,6 @@
             closeSettingsModal();
         }
 
-        // 成功动画
         function showSuccess(emoji) {
             const el = document.createElement('div');
             el.className = 'success-animation';
@@ -1220,148 +1061,44 @@
             setTimeout(() => el.remove(), 600);
         }
 
-        // ========== 数据导出/导入功能 ==========
-        
-        // 导出数据为JSON文件（全量备份）
+        // 导出全量备份（从服务端获取最新数据）
         function exportData() {
-            const blindBoxData = JSON.parse(localStorage.getItem('ultraman-blindbox') || 'null');
-            const data = {
-                version: '2.0',
-                exportTime: new Date().toISOString(),
-                sharedPoints: getSharedPoints(),
-                blindBox: blindBoxData,
-                tracker: {
-                    goals: goals,
-                    records: records,
-                    settings: settings
-                }
-            };
-
-            const jsonStr = JSON.stringify(data, null, 2);
-            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const data = getFullExportData();
+            if (!data) { alert('数据未加载'); return; }
+            data.exportTime = new Date().toISOString();
+            data.version = '2.0';
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-
             const date = new Date();
             const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
-            const filename = `全量备份_${dateStr}.json`;
-
             const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            a.href = url; a.download = `全量备份_${dateStr}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
-
             document.getElementById('lastBackupTime').textContent = `上次导出: ${date.toLocaleString('zh-CN')}`;
-            localStorage.setItem('lastBackupTime', date.toISOString());
-
             showSuccess('📤');
         }
 
-        // 导入数据（支持 v1.0 和 v2.0 全量备份）
+        // 导入全量备份
         function importData(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
-
-                    if (data.version === '2.0' && data.tracker) {
-                        // v2.0 全量备份
-                        const totalEarned = data.tracker.records.reduce((sum, r) => sum + r.points, 0);
-
-                        const confirmMsg = `确定要导入全量备份吗？\n\n` +
-                            `📁 文件: ${file.name}\n` +
-                            `📅 备份时间: ${data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知'}\n` +
-                            `⭐ 可用积分: ${data.sharedPoints ?? 0}\n` +
-                            `📋 任务目标数: ${data.tracker.goals.length}\n` +
-                            `📝 任务记录数: ${data.tracker.records.length}\n` +
-                            `🎁 盲盒数据: ${data.blindBox ? '包含' : '无'}\n\n` +
-                            `⚠️ 这将覆盖当前所有数据！`;
-
-                        if (!confirm(confirmMsg)) { event.target.value = ''; return; }
-
-                        // 恢复共享积分
-                        if (data.sharedPoints !== null && data.sharedPoints !== undefined) {
-                            setSharedPoints(data.sharedPoints);
-                        } else {
-                            setSharedPoints(totalEarned);
-                        }
-
-                        // 恢复任务数据
-                        goals = data.tracker.goals;
-                        records = data.tracker.records;
-                        settings = data.tracker.settings;
-
-                        // 恢复盲盒数据
-                        if (data.blindBox) {
-                            localStorage.setItem('ultraman-blindbox', JSON.stringify(data.blindBox));
-                        }
-
-                    } else if (data.goals && data.records && data.settings) {
-                        // v1.0 旧版任务数据（向后兼容）
-                        const totalEarned = data.records.reduce((sum, r) => sum + r.points, 0);
-
-                        const confirmMsg = `确定要导入数据吗？\n\n` +
-                            `📁 文件: ${file.name}\n` +
-                            `📋 目标数: ${data.goals.length}\n` +
-                            `📝 记录数: ${data.records.length}\n` +
-                            `⭐ 总积分: ${totalEarned}\n\n` +
-                            `⚠️ 这将覆盖当前任务数据！`;
-
-                        if (!confirm(confirmMsg)) { event.target.value = ''; return; }
-
-                        goals = data.goals;
-                        records = data.records;
-                        settings = data.settings;
-                        setSharedPoints(totalEarned);
-                    } else {
-                        alert('❌ 无效的数据文件格式！');
-                        event.target.value = '';
-                        return;
-                    }
-
-                    // 保存并刷新
-                    saveData();
-                    renderGoals();
-                    renderRecords();
-                    updateStats();
-
-                    showSuccess('📥');
-                    alert('✅ 数据导入成功！');
-
+                    const recordsCount = data.tracker?.records?.length || data.records?.length || 0;
+                    if (!confirm(`确定恢复备份？\n⭐ 积分: ${data.sharedPoints ?? '未知'}\n📝 记录: ${recordsCount}\n⚠️ 将覆盖所有数据！`)) { event.target.value = ''; return; }
+                    const res = await fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                    if (!res.ok) throw new Error('Server error ' + res.status);
+                    alert('✅ 恢复成功！页面将刷新。');
+                    location.reload();
                 } catch (err) {
-                    alert('❌ 文件解析失败，请确保是有效的JSON文件！\n\n错误: ' + err.message);
+                    alert('❌ 恢复失败: ' + err.message);
                 }
                 event.target.value = '';
             };
             reader.readAsText(file);
-        }
-
-        // 页面加载时恢复备份时间显示
-        function restoreBackupTime() {
-            const lastTime = localStorage.getItem('lastBackupTime');
-            if (lastTime) {
-                const date = new Date(lastTime);
-                document.getElementById('lastBackupTime').textContent = `上次导出: ${date.toLocaleString('zh-CN')}`;
-            }
-        }
-    </script>
-    <script src="js/api.js"></script>
-    <script>
-        // api.js 加载后启动后台同步（失败不影响主功能）
-        if (typeof initApiSync === 'function') {
-            initApiSync().then(() => {
-                loadData();
-                syncSharedPointsFromRecords();
-                updateSyncIndicator();
-                renderGoals();
-                renderRecords();
-                updateStats();
-            }).catch(() => {});
         }
     </script>
 </body>

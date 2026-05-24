@@ -1,110 +1,128 @@
-// ===== 服务端数据同步 =====
-const API_BASE = window.location.origin || '';
-const DATA_URL = API_BASE ? (API_BASE + '/api/data') : '/api/data';
+// ===== 服务端数据层（唯一数据源）=====
+const DATA_URL = '/api/data';
 
-let serverAvailable = false;
+let appData = null;      // 内存中的数据
+let ready = false;       // 数据是否已加载
+let saveTimer = null;    // 防抖保存
 
-// 安全的超时 fetch（兼容旧浏览器）
-function fetchWithTimeout(url, options, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    fetch(url, { ...options, signal: controller.signal })
-      .then(res => { clearTimeout(timer); resolve(res); })
-      .catch(err => { clearTimeout(timer); reject(err); });
-  });
-}
-
-async function apiGetData() {
-  try {
-    const res = await fetchWithTimeout(DATA_URL, {}, 3000);
-    if (!res.ok) throw new Error('Server error: ' + res.status);
-    serverAvailable = true;
-    return await res.json();
-  } catch (e) {
-    serverAvailable = false;
-    console.warn('服务器不可用，使用本地缓存:', e.message);
-    return null;
+// 加载数据（页面启动时调用，必须成功）
+async function loadAppData() {
+  const res = await fetch(DATA_URL);
+  if (!res.ok) throw new Error('服务器返回 ' + res.status);
+  appData = await res.json();
+  if (!appData || typeof appData.sharedPoints !== 'number') {
+    throw new Error('服务器数据格式异常，请检查 data.json');
   }
+  ready = true;
+  return appData;
 }
 
-async function apiSaveData(data) {
-  try {
-    const res = await fetchWithTimeout(DATA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }, 3000);
-    if (!res.ok) throw new Error('Server error: ' + res.status);
-    serverAvailable = true;
-    localStorage.setItem('offlineCache', JSON.stringify(data));
-    return true;
-  } catch (e) {
-    serverAvailable = false;
-    console.warn('保存到服务器失败，存入本地缓存:', e.message);
-    localStorage.setItem('offlineCache', JSON.stringify(data));
-    return false;
-  }
-}
-
-// 构建全量数据对象
-function buildFullData(sharedPoints, blindBoxData, trackerData) {
-  return {
-    sharedPoints: sharedPoints,
-    blindBox: blindBoxData || {},
-    tracker: trackerData || {},
-  };
-}
-
-// 检查是否有离线缓存需要同步到服务器
-async function syncOfflineCache() {
-  const cached = localStorage.getItem('offlineCache');
-  if (cached) {
+// 保存数据（防抖，避免频繁请求）
+function saveAppData() {
+  if (!ready || !appData) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
     try {
-      const data = JSON.parse(cached);
-      const success = await apiSaveData(data);
-      if (success) {
-        console.log('✅ 离线缓存已同步到服务器');
-      }
+      const res = await fetch(DATA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appData),
+      });
+      if (!res.ok) console.error('保存失败: ' + res.status);
     } catch (e) {
-      // ignore
+      console.error('保存失败:', e.message);
     }
-  }
+  }, 300);
 }
 
-// 显示同步状态
-function updateSyncIndicator() {
-  const el = document.getElementById('syncStatus');
-  if (!el) return;
-  if (serverAvailable) {
-    el.textContent = '🟢 已连接';
-    el.style.color = '#2ecc71';
-  } else {
-    el.textContent = '🔴 离线';
-    el.style.color = '#e74c3c';
-  }
+// 立即保存（页面关闭前）
+function saveAppDataNow() {
+  if (!ready || !appData) return;
+  clearTimeout(saveTimer);
+  fetch(DATA_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(appData),
+    keepalive: true,
+  }).catch(() => {});
 }
 
-// 初始化同步
-async function initApiSync() {
-  const data = await apiGetData();
-  if (data) {
-    // 服务器有数据 → 同步到本地
-    // 积分只同步有效值（>= 0），防止服务器初始化异常导致积分为空
-    if (data.sharedPoints !== undefined && data.sharedPoints !== null && data.sharedPoints >= 0) {
-      localStorage.setItem('sharedPoints', String(data.sharedPoints));
-    }
-    if (data.blindBox) {
-      localStorage.setItem('ultraman-blindbox', JSON.stringify(data.blindBox));
-    }
-    if (data.tracker) {
-      if (data.tracker.goals) localStorage.setItem('pointsGoals', JSON.stringify(data.tracker.goals));
-      if (data.tracker.records) localStorage.setItem('pointsRecords', JSON.stringify(data.tracker.records));
-      if (data.tracker.settings) localStorage.setItem('pointsSettings', JSON.stringify(data.tracker.settings));
-    }
-  } else {
-    // 服务器不可用，尝试同步离线缓存
-    await syncOfflineCache();
+// ===== 积分 =====
+function getPoints() {
+  return ready ? appData.sharedPoints : null;
+}
+
+function setPoints(val) {
+  if (!ready) return;
+  appData.sharedPoints = Math.max(0, val);
+  saveAppData();
+}
+
+function addPoints(amount) {
+  if (!ready) return;
+  appData.sharedPoints = Math.max(0, appData.sharedPoints + amount);
+  saveAppData();
+}
+
+function deductPoints(amount) {
+  if (!ready) return false;
+  if (appData.sharedPoints < amount) return false;
+  appData.sharedPoints -= amount;
+  saveAppData();
+  return true;
+}
+
+// ===== 盲盒配置 =====
+function getBlindBox() {
+  if (!ready) return null;
+  if (!appData.blindBox) {
+    appData.blindBox = { drawCost: 10, dailyReward: 1, lastDailyDate: null, gifts: [], history: [] };
   }
-  updateSyncIndicator();
+  return appData.blindBox;
+}
+
+function saveBlindBox(cfg) {
+  if (!ready) return;
+  appData.blindBox = cfg;
+  saveAppData();
+}
+
+// ===== 任务追踪 =====
+function getTracker() {
+  if (!ready) return null;
+  if (!appData.tracker) {
+    appData.tracker = { goals: [], records: [], settings: { targetPoints: 100, rewardText: '神秘奖励' } };
+  }
+  return appData.tracker;
+}
+
+function saveTracker(t) {
+  if (!ready) return;
+  appData.tracker = t;
+  saveAppData();
+}
+
+// 完成一个任务（添加积分 + 记录）
+function addTaskRecord(goal) {
+  if (!ready) return;
+  const tracker = getTracker();
+  const record = {
+    id: Date.now(),
+    goalId: goal.id,
+    name: goal.name,
+    points: goal.points,
+    icon: goal.icon,
+    time: new Date().toISOString(),
+    note: '',
+  };
+  tracker.records.push(record);
+  appData.sharedPoints = Math.max(0, appData.sharedPoints + goal.points);
+  saveAppData();
+  return record;
+}
+
+// ===== 备份 =====
+function getFullExportData() {
+  if (!ready) return null;
+  return JSON.parse(JSON.stringify(appData));
 }
