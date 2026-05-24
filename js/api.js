@@ -90,7 +90,8 @@ async function initApiSync() {
   const data = await apiGetData();
   if (data) {
     // 服务器有数据 → 同步到本地
-    if (data.sharedPoints !== undefined) {
+    // 积分只同步有效值（>= 0），防止服务器初始化异常导致积分为空
+    if (data.sharedPoints !== undefined && data.sharedPoints !== null && data.sharedPoints >= 0) {
       localStorage.setItem('sharedPoints', String(data.sharedPoints));
     }
     if (data.blindBox) {
