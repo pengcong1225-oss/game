@@ -306,6 +306,24 @@
             gap: 8px;
         }
 
+        .goal-item.completed-today {
+            opacity: 0.55;
+            border-color: rgba(46, 204, 113, 0.3);
+        }
+
+        .done-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            color: #2ecc71;
+            margin-top: 2px;
+        }
+
+        .btn-done {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+            cursor: not-allowed;
+        }
+
         /* 记录列表 */
         .record-list {
             max-height: 400px;
@@ -864,6 +882,12 @@
             document.getElementById('completeTime').value = localTime.toISOString().slice(0, 16);
         }
 
+        // 检查任务今日是否已完成
+        function isTaskCompletedToday(goalId) {
+            const today = new Date().toDateString();
+            return records.some(r => r.goalId === goalId && new Date(r.time).toDateString() === today);
+        }
+
         // 渲染目标列表
         function renderGoals() {
             const container = document.getElementById('goalList');
@@ -871,21 +895,27 @@
                 container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📭</div><p>还没有添加目标<br>点击上方按钮添加第一个目标吧！</p></div>`;
                 return;
             }
-            container.innerHTML = goals.map(goal => `
-                <div class="goal-item">
+            container.innerHTML = goals.map(goal => {
+                const completed = isTaskCompletedToday(goal.id);
+                return `
+                <div class="goal-item${completed ? ' completed-today' : ''}">
                     <div class="goal-info">
                         <span class="goal-icon">${goal.icon}</span>
                         <div class="goal-details">
                             <h4>${goal.name}</h4>
                             <span class="goal-points">+${goal.points} 积分</span>
+                            ${completed ? '<span class="done-badge">✅ 今日已完成</span>' : ''}
                         </div>
                     </div>
                     <div class="goal-actions">
-                        <button class="btn btn-success btn-small" onclick="quickComplete(${goal.id})">✓</button>
+                        <button class="btn btn-small ${completed ? 'btn-done' : 'btn-success'}"
+                                ${completed ? 'disabled' : `onclick="quickComplete(${goal.id})"`}>
+                            ${completed ? '✔' : '✓'}
+                        </button>
                         <button class="btn btn-danger btn-small" onclick="deleteGoal(${goal.id})">🗑</button>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
 
         // 渲染记录列表
@@ -1015,6 +1045,10 @@
         function quickComplete(goalId) {
             const goal = goals.find(g => g.id === goalId);
             if (!goal) return;
+            if (isTaskCompletedToday(goalId)) {
+                alert('该任务今日已完成，明天再来吧！');
+                return;
+            }
             if (typeof addTaskRecord === 'function') {
                 addTaskRecord(goal);  // 内部已 push 记录 + 加积分
             } else {
