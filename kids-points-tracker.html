@@ -1141,7 +1141,7 @@
                     const data = JSON.parse(e.target.result);
                     const recordsCount = data.tracker?.records?.length || data.records?.length || 0;
                     if (!confirm(`确定恢复备份？\n⭐ 积分: ${data.sharedPoints ?? '未知'}\n📝 记录: ${recordsCount}\n⚠️ 将覆盖所有数据！`)) { event.target.value = ''; return; }
-                    const res = await fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                    const res = await fetch('/family/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
                     if (!res.ok) throw new Error('Server error ' + res.status);
                     alert('✅ 恢复成功！页面将刷新。');
                     location.reload();
