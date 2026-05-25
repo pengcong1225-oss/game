@@ -425,8 +425,14 @@ function renderTierSettings() {
     el.addEventListener('input', () => {
       const ti = parseInt(el.dataset.tier), gi = parseInt(el.dataset.index), field = el.dataset.field;
       if (isNaN(ti)) return;
-      if (field === 'name' || field === 'cost') { gameState.drawTiers[ti][field] = field === 'cost' ? (parseInt(el.value) || 1) : el.value; }
-      else if (!isNaN(gi)) { gameState.drawTiers[ti].gifts[gi][field] = field === 'probability' ? (parseInt(el.value) || 0) : el.value; }
+      if (!isNaN(gi)) {
+        // 奖品级字段
+        gameState.drawTiers[ti].gifts[gi][field] = field === 'probability' ? (parseInt(el.value) || 0) : el.value;
+      } else {
+        // 档位级字段
+        if (field === 'cost') gameState.drawTiers[ti].cost = parseInt(el.value) || 1;
+        else if (field === 'name') gameState.drawTiers[ti].name = el.value;
+      }
       updateProbChart();
     });
   });
