@@ -51,14 +51,16 @@
         <div class="platform"></div>
       </div>
 
-      <!-- 多档抽奖按钮 -->
-      <div class="draw-buttons" id="drawButtons"></div>
+      <!-- 抽奖按钮 -->
+      <button class="draw-btn" id="drawBtn">
+        <span class="draw-btn-text">✨ 消耗 <strong id="drawCost">10</strong> 积分抽取 ✨</span>
+        <span class="draw-btn-sub">点击开启神秘盲盒</span>
+      </button>
     </section>
 
     <!-- 右侧 - 奖品展示 -->
     <section class="prize-area">
-      <div class="tier-tabs" id="tierTabs"></div>
-      <h2 class="section-title" style="margin-top:8px;">
+      <h2 class="section-title">
         <span class="title-deco">★</span> 可获奖励 <span class="title-deco">★</span>
       </h2>
       <div class="prize-grid" id="prizeGrid">
@@ -109,12 +111,10 @@
             <input type="number" id="setDailyReward" min="1" max="9999" value="1">
           </div>
         </div>
-        <!-- 档位 & 奖品设置 -->
+        <!-- 档位 & 奖品池 -->
         <div class="setting-group">
           <h4>盲盒档位 & 奖品池</h4>
-          <div class="gift-list" id="giftSettingsList">
-            <!-- JS 动态生成 -->
-          </div>
+          <div class="gift-list" id="giftSettingsList"></div>
           <button class="btn-add-gift" id="btnAddTier" style="margin-top:10px;">+ 添加新档位</button>
         </div>
         <!-- 概率预览 -->
