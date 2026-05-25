@@ -1,5 +1,5 @@
 // ===== 服务端数据层（唯一数据源）=====
-const DATA_URL = '/api/data';
+const DATA_URL = '/family/api/data';
 
 let appData = null;      // 内存中的数据
 let ready = false;       // 数据是否已加载

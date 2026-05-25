@@ -140,6 +140,9 @@ function getTierRarityPreview(tier) {
 function updatePrizeGrid() {
   const tier = gameState.drawTiers[gameState.activeTier] || gameState.drawTiers[0];
   if (!tier) return;
+  // 动态标题
+  const title = $('#sectionTitle');
+  if (title) title.innerHTML = `<span class="title-deco">★</span> ${tier.name} · 奖品池 <span class="title-deco">★</span>`;
   dom.prizeGrid.innerHTML = tier.gifts.map(g => `
     <div class="prize-card" data-rarity="${g.rarity}">
       <span class="prize-emoji">${g.emoji}</span>

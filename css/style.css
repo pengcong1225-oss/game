@@ -161,159 +161,18 @@ body {
   font-weight: 400;
 }
 
-/* ===== 多档抽奖按钮 ===== */
-.draw-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-  max-width: 300px;
-}
-
-.draw-btn.tier-btn {
-  width: 100%;
-  padding: 14px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: linear-gradient(135deg, #1a1a3e, #0d0d25);
-  border: 2px solid rgba(255,255,255,0.12);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-}
-
-.draw-btn.tier-btn:hover:not(:disabled) {
-  border-color: var(--ultra-gold);
-  box-shadow: 0 6px 25px rgba(255,215,0,0.25);
-  transform: translateY(-2px);
-}
-
-.draw-btn.tier-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  background: linear-gradient(135deg, #1a1a2e, #111);
-}
-
-/* ===== 档位切换标签 ===== */
-.tier-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.tier-tab {
-  padding: 6px 16px;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 16px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  color: #888;
-  transition: all 0.2s;
-}
-
-.tier-tab:hover {
-  border-color: rgba(255,255,255,0.3);
-  color: #ccc;
-}
-
-.tier-tab.active {
-  background: rgba(224,0,29,0.15);
-  border-color: var(--ultra-red);
-  color: #fff;
-}
-
-/* ===== 档位设置面板 ===== */
-.tier-settings-group {
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-
-.tier-settings-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.tier-name-input {
-  flex: 1;
-  padding: 6px 10px;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 6px;
-  background: rgba(255,255,255,0.05);
-  color: #fff;
-  font-size: 13px;
-  font-family: inherit;
-}
-
-.tier-cost-input {
-  width: 70px;
-  padding: 6px 10px;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 6px;
-  background: rgba(255,255,255,0.05);
-  color: #fff;
-  font-size: 13px;
-  font-family: inherit;
-  text-align: center;
-}
-
-.tier-cost-label {
-  font-size: 12px;
-  color: #888;
-}
-
-.btn-remove-tier {
-  width: 28px; height: 28px;
-  border: none; border-radius: 50%;
-  background: rgba(224,0,29,0.3);
-  color: #fff; cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.btn-remove-tier:hover { background: var(--ultra-red); }
-
-.tier-gift-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.btn-add-gift-small {
-  width: 100%;
-  padding: 6px;
-  border: 1px dashed rgba(255,255,255,0.2);
-  border-radius: 8px;
-  background: transparent;
-  color: #888;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  margin-top: 6px;
-  transition: all 0.2s;
-}
-
-.btn-add-gift-small:hover {
-  border-color: rgba(255,255,255,0.4);
-  color: #fff;
-}
-
 /* ===== 主游戏区 ===== */
 #main {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 60px;
+  gap: 40px;
   padding: calc(var(--header-h) + 40px) 24px 40px;
   min-height: 100vh;
   position: relative;
   z-index: 1;
+  max-width: 960px;
+  margin: 0 auto;
 }
 
 /* ===== 盲盒机区域 ===== */
@@ -321,7 +180,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 30px;
+  gap: 20px;
+  flex-shrink: 0;
 }
 
 .machine-container {
@@ -536,6 +396,159 @@ body {
   font-weight: 400;
   opacity: 0.8;
   margin-top: 2px;
+}
+
+/* ===== 多档抽奖按钮 ===== */
+.draw-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.draw-btn.tier-btn {
+  width: 100%;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #1a1a3e, #0d0d25);
+  border: 2px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.draw-btn.tier-btn:hover:not(:disabled) {
+  border-color: var(--ultra-gold);
+  box-shadow: 0 6px 25px rgba(255,215,0,0.3), 0 0 40px rgba(255,215,0,0.1);
+  transform: translateY(-2px);
+}
+
+.draw-btn.tier-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, #1a1a2e, #111);
+}
+
+/* ===== 档位切换标签 ===== */
+.tier-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.tier-tab {
+  padding: 8px 18px;
+  border: 2px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: #999;
+  background: rgba(255,255,255,0.03);
+  transition: all 0.25s;
+  user-select: none;
+}
+
+.tier-tab:hover {
+  border-color: rgba(255,255,255,0.3);
+  color: #ddd;
+  background: rgba(255,255,255,0.08);
+}
+
+.tier-tab.active {
+  background: linear-gradient(135deg, rgba(224,0,29,0.25), rgba(255,215,0,0.1));
+  border-color: var(--ultra-red);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(224,0,29,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+/* ===== 档位设置面板 ===== */
+.tier-settings-group {
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 14px;
+  background: rgba(255,255,255,0.03);
+}
+
+.tier-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tier-name-input {
+  flex: 1;
+  min-width: 100px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.tier-cost-input {
+  width: 70px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: center;
+}
+
+.tier-cost-label {
+  font-size: 13px;
+  color: #aaa;
+}
+
+.btn-remove-tier {
+  width: 32px; height: 32px;
+  border: none; border-radius: 50%;
+  background: rgba(224,0,29,0.25);
+  color: #fff; cursor: pointer;
+  font-size: 14px; font-weight: 700;
+  transition: all 0.2s;
+}
+
+.btn-remove-tier:hover { background: var(--ultra-red); }
+
+.tier-gift-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 4px;
+  border-left: 2px solid rgba(255,255,255,0.06);
+  margin-bottom: 8px;
+}
+
+.btn-add-gift-small {
+  width: 100%;
+  padding: 8px;
+  border: 2px dashed rgba(255,255,255,0.15);
+  border-radius: 10px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.btn-add-gift-small:hover {
+  border-color: rgba(255,215,0,0.4);
+  color: #fff;
+  background: rgba(255,215,0,0.05);
 }
 
 /* ===== 奖品展示区 ===== */
@@ -793,6 +806,76 @@ body {
   70% { transform: translate(-4px, -2px); }
   80% { transform: translate(2px, 4px); }
   90% { transform: translate(-2px, -2px); }
+}
+
+/* ===== 增强特效 ===== */
+
+/* 屏幕闪光 */
+.screen-flash {
+  position: fixed; inset: 0; z-index: 1000; pointer-events: none;
+  animation: flashBoom 0.6s ease-out forwards;
+}
+
+@keyframes flashBoom {
+  0% { background: rgba(255,255,255,0); }
+  30% { background: rgba(255,255,255,0.7); }
+  100% { background: rgba(255,255,255,0); }
+}
+
+/* 光柱射线 */
+.light-beam {
+  position: absolute; pointer-events: none;
+  width: 4px; border-radius: 2px;
+  transform-origin: center bottom;
+  animation: beamShoot 0.8s ease-out forwards;
+}
+
+@keyframes beamShoot {
+  0% { opacity: 0; transform: scaleY(0); }
+  40% { opacity: 1; transform: scaleY(1); }
+  100% { opacity: 0; transform: scaleY(0.3); }
+}
+
+/* 脉冲光圈 */
+.ring-pulse {
+  position: absolute; pointer-events: none;
+  border-radius: 50%;
+  animation: ringExpand 1s ease-out forwards;
+}
+
+@keyframes ringExpand {
+  0% { width: 20px; height: 20px; opacity: 0.8; border-width: 4px; }
+  100% { width: 400px; height: 400px; opacity: 0; border-width: 1px; transform: translate(-190px, -190px); }
+}
+
+/* 漂浮星星 */
+.float-star {
+  position: absolute; pointer-events: none;
+  animation: starFloat 2s ease-out forwards;
+}
+
+@keyframes starFloat {
+  0% { opacity: 1; transform: translateY(0) scale(0.3) rotate(0deg); }
+  50% { opacity: 0.8; transform: translateY(-80px) scale(1.2) rotate(180deg); }
+  100% { opacity: 0; transform: translateY(-180px) scale(0) rotate(360deg); }
+}
+
+/* 闪光粒子 */
+.sparkle {
+  position: absolute; pointer-events: none;
+  width: 3px; height: 3px; border-radius: 50%;
+  animation: sparkleFly 1.5s ease-out forwards;
+}
+
+@keyframes sparkleFly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--sx), var(--sy)) scale(0);
+    opacity: 0;
+  }
 }
 
 /* ===== 历史侧边栏 ===== */
