@@ -41,24 +41,22 @@ let gameState = {
   points: DEFAULT_POINTS,
   dailyReward: DEFAULT_DAILY_REWARD,
   drawTiers: JSON.parse(JSON.stringify(DEFAULT_TIERS)),
-  activeTier: 0,      // 当前选中的档位
+  activeTier: 0,
   history: [],
   isDrawing: false,
   lastDailyDate: null,
 };
 
-// ===== DOM 缓存 =====
+// ===== DOM =====
 const $ = (sel) => document.querySelector(sel);
 
 const dom = {
   pointsValue: $('#pointsValue'),
   drawButtons: $('#drawButtons'),
-  drawBtn: $('#drawBtn'),
   blindBox: $('#blindBox'),
   auraRing: $('#auraRing'),
   boxGlow: $('.box-glow'),
   colorTimer: $('#colorTimer'),
-  machineContainer: $('#machineContainer'),
   prizeGrid: $('#prizeGrid'),
   resultOverlay: $('#resultOverlay'),
   resultCard: $('#resultCard'),
@@ -88,7 +86,6 @@ function loadState() {
     gameState.history = bb.history ?? [];
     gameState.lastDailyDate = bb.lastDailyDate ?? null;
 
-    // 兼容旧格式（单礼品池）→ 转为多档
     if (bb.drawTiers?.length) {
       gameState.drawTiers = bb.drawTiers;
     } else if (bb.gifts?.length) {
@@ -109,7 +106,7 @@ function saveState() {
   });
 }
 
-// ===== 更新 UI =====
+// ===== UI 更新 =====
 function updatePoints() {
   dom.pointsValue.textContent = gameState.points;
   dom.pointsValue.classList.remove('bump');
@@ -119,19 +116,12 @@ function updatePoints() {
 
 function updateDrawButtons() {
   dom.drawButtons.innerHTML = gameState.drawTiers.map((tier, i) => {
-    const canAfford = gameState.points >= tier.cost;
-    return `
-      <button class="draw-btn tier-btn tier-${i}"
-              ${!canAfford || gameState.isDrawing ? 'disabled' : ''}
-              data-tier="${i}">
-        <span class="draw-btn-text">🎁 ${tier.name} · <strong>${tier.cost}</strong> 积分</span>
-        <span class="draw-btn-sub">
-          ${getTierRarityPreview(tier)}
-        </span>
-      </button>`;
+    const can = gameState.points >= tier.cost;
+    return `<button class="draw-btn tier-btn" ${!can || gameState.isDrawing ? 'disabled' : ''} data-tier="${i}">
+      <span class="draw-btn-text">🎁 ${tier.name} · <strong>${tier.cost}</strong> 积分</span>
+      <span class="draw-btn-sub">${getTierRarityPreview(tier)}</span>
+    </button>`;
   }).join('');
-
-  // 绑定点击事件
   dom.drawButtons.querySelectorAll('.tier-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const ti = parseInt(btn.dataset.tier);
@@ -141,12 +131,10 @@ function updateDrawButtons() {
 }
 
 function getTierRarityPreview(tier) {
-  const rarities = { common: 0, rare: 0, epic: 0, legendary: 0 };
-  tier.gifts.forEach(g => { rarities[g.rarity] += g.probability; });
-  const total = Object.values(rarities).reduce((s, v) => s + v, 0) || 1;
-  const legendaryPct = (rarities.legendary / total * 100).toFixed(0);
-  const epicPct = (rarities.epic / total * 100).toFixed(0);
-  return `传说 ${legendaryPct}% · 史诗 ${epicPct}%`;
+  const r = { common: 0, rare: 0, epic: 0, legendary: 0 };
+  tier.gifts.forEach(g => { r[g.rarity] += g.probability; });
+  const t = Object.values(r).reduce((s, v) => s + v, 0) || 1;
+  return `传说 ${(r.legendary / t * 100).toFixed(0)}% · 史诗 ${(r.epic / t * 100).toFixed(0)}%`;
 }
 
 function updatePrizeGrid() {
@@ -158,18 +146,14 @@ function updatePrizeGrid() {
       <span class="prize-name">${g.name}</span>
       <span class="prize-rarity-badge ${g.rarity}">${RARITY_CONFIG[g.rarity].label}</span>
       <span class="prize-prob">概率 ${g.probability}%</span>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
-// 档位切换标签
 function updateTierTabs() {
   const tabs = $('#tierTabs');
   if (!tabs) return;
   tabs.innerHTML = gameState.drawTiers.map((tier, i) => `
-    <span class="tier-tab ${i === gameState.activeTier ? 'active' : ''}" data-tier="${i}">
-      ${tier.name} · ${tier.cost}分
-    </span>
+    <span class="tier-tab ${i === gameState.activeTier ? 'active' : ''}" data-tier="${i}">${tier.name} · ${tier.cost}分</span>
   `).join('');
   tabs.querySelectorAll('.tier-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -191,7 +175,7 @@ function updateAllUI() {
 function drawGift(tierIndex) {
   const tier = gameState.drawTiers[tierIndex];
   if (!tier) return null;
-  const totalProb = tier.gifts.reduce((sum, g) => sum + g.probability, 0);
+  const totalProb = tier.gifts.reduce((s, g) => s + g.probability, 0);
   let rand = Math.random() * totalProb;
   for (const gift of tier.gifts) {
     rand -= gift.probability;
@@ -200,60 +184,92 @@ function drawGift(tierIndex) {
   return tier.gifts[tier.gifts.length - 1];
 }
 
-// ===== 特效系统 =====
+// ===== 酷炫特效 =====
 function spawnParticles(x, y, count, color) {
-  const fragment = document.createDocumentFragment();
+  const f = document.createDocumentFragment();
   for (let i = 0; i < count; i++) {
     const p = document.createElement('div');
     p.className = 'particle';
-    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
-    const distance = 80 + Math.random() * 140;
-    p.style.cssText = `
-      left: ${x}px; top: ${y}px;
-      width: ${4 + Math.random() * 8}px;
-      height: ${4 + Math.random() * 8}px;
-      background: ${color};
-      border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
-      --dx: ${Math.cos(angle) * distance}px;
-      --dy: ${Math.sin(angle) * distance}px;
-      box-shadow: 0 0 6px ${color};
-    `;
-    fragment.appendChild(p);
+    const a = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const d = 80 + Math.random() * 140;
+    p.style.cssText = `left:${x}px;top:${y}px;width:${4+Math.random()*8}px;height:${4+Math.random()*8}px;background:${color};border-radius:${Math.random()>.5?'50%':'2px'};--dx:${Math.cos(a)*d}px;--dy:${Math.sin(a)*d}px;box-shadow:0 0 6px ${color};`;
+    f.appendChild(p);
   }
-  dom.effectsLayer.appendChild(fragment);
-  setTimeout(() => {
-    dom.effectsLayer.querySelectorAll('.particle').forEach(el => el.remove());
-  }, 1500);
+  dom.effectsLayer.appendChild(f);
+  setTimeout(() => { dom.effectsLayer.querySelectorAll('.particle').forEach(el => el.remove()); }, 1500);
 }
 
 function spawnConfetti(count) {
   const colors = ['#FFD700', '#E0001D', '#3B82F6', '#A855F7', '#00E5FF', '#FF6B6B', '#51CF66'];
-  const fragment = document.createDocumentFragment();
+  const f = document.createDocumentFragment();
   for (let i = 0; i < count; i++) {
     const c = document.createElement('div');
     c.className = 'confetti';
-    c.style.cssText = `
-      left: ${Math.random() * 100}vw;
-      top: -20px;
-      background: ${colors[Math.floor(Math.random() * colors.length)]};
-      border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
-      animation-delay: ${Math.random() * 0.6}s;
-      animation-duration: ${2 + Math.random() * 2}s;
-      width: ${6 + Math.random() * 12}px;
-      height: ${6 + Math.random() * 12}px;
-      transform: rotate(${Math.random() * 360}deg);
-    `;
-    fragment.appendChild(c);
+    c.style.cssText = `left:${Math.random()*100}vw;top:-20px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:${Math.random()>.5?'50%':'2px'};animation-delay:${Math.random()*.6}s;animation-duration:${2+Math.random()*2}s;width:${6+Math.random()*12}px;height:${6+Math.random()*12}px;transform:rotate(${Math.random()*360}deg);`;
+    f.appendChild(c);
   }
-  dom.effectsLayer.appendChild(fragment);
-  setTimeout(() => {
-    dom.effectsLayer.querySelectorAll('.confetti').forEach(el => el.remove());
-  }, 4000);
+  dom.effectsLayer.appendChild(f);
+  setTimeout(() => { dom.effectsLayer.querySelectorAll('.confetti').forEach(el => el.remove()); }, 4000);
 }
 
 function screenShake() {
   document.body.classList.add('screen-shake');
   setTimeout(() => document.body.classList.remove('screen-shake'), 500);
+}
+
+function screenFlash(color) {
+  const el = document.createElement('div');
+  el.className = 'screen-flash';
+  if (color) el.style.background = color;
+  dom.effectsLayer.appendChild(el);
+  setTimeout(() => el.remove(), 700);
+}
+
+function spawnLightBeams(x, y, count, color) {
+  for (let i = 0; i < count; i++) {
+    const beam = document.createElement('div');
+    beam.className = 'light-beam';
+    const angle = (360 / count) * i + (Math.random() - 0.5) * 10;
+    const len = 120 + Math.random() * 160;
+    beam.style.cssText = `left:${x}px;top:${y}px;height:${len}px;background:linear-gradient(to top,${color},transparent);box-shadow:0 0 12px ${color},0 0 30px ${color};transform:rotate(${angle}deg) translateY(20px);animation-delay:${Math.random()*.2}s;`;
+    dom.effectsLayer.appendChild(beam);
+    setTimeout(() => beam.remove(), 1000);
+  }
+}
+
+function spawnRisingStars(x, y, count, emojis) {
+  for (let i = 0; i < count; i++) {
+    const star = document.createElement('div');
+    star.className = 'float-star';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 30 + Math.random() * 60;
+    star.style.cssText = `left:${x+Math.cos(angle)*dist}px;top:${y+Math.random()*40}px;font-size:${16+Math.random()*28}px;animation-delay:${Math.random()*.5}s;animation-duration:${1.5+Math.random()*1.5}s;`;
+    star.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    dom.effectsLayer.appendChild(star);
+    setTimeout(() => star.remove(), 2500);
+  }
+}
+
+function spawnRingPulse(x, y, color) {
+  for (let i = 0; i < 3; i++) {
+    const ring = document.createElement('div');
+    ring.className = 'ring-pulse';
+    ring.style.cssText = `left:${x}px;top:${y}px;border:3px solid ${color};box-shadow:0 0 20px ${color},inset 0 0 20px ${color}44;animation-delay:${i*.15}s;`;
+    dom.effectsLayer.appendChild(ring);
+    setTimeout(() => ring.remove(), 1200);
+  }
+}
+
+function spawnSparkles(x, y, count, color) {
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'sparkle';
+    const a = Math.random() * Math.PI * 2;
+    const d = 40 + Math.random() * 120;
+    s.style.cssText = `left:${x}px;top:${y}px;background:${color};box-shadow:0 0 6px ${color},0 0 12px ${color};--sx:${Math.cos(a)*d}px;--sy:${Math.sin(a)*d-40}px;animation-delay:${Math.random()*.3}s;animation-duration:${.8+Math.random()*1.2}s;width:${2+Math.random()*5}px;height:${2+Math.random()*5}px;`;
+    dom.effectsLayer.appendChild(s);
+    setTimeout(() => s.remove(), 1600);
+  }
 }
 
 // ===== 抽奖流程 =====
@@ -269,12 +285,12 @@ async function performDraw(tierIndex) {
   updatePoints();
   updateDrawButtons();
 
-  // 盲盒震动
+  // 蓄力：震动 + 光环加速 + 能量计时器变红
   dom.blindBox.classList.add('shaking');
   dom.auraRing.classList.add('active');
-  dom.colorTimer.style.animationDuration = '0.3s';
+  dom.colorTimer.style.animationDuration = '0.2s';
   dom.colorTimer.style.background = '#ff4444';
-  dom.colorTimer.style.boxShadow = '0 0 20px #ff4444';
+  dom.colorTimer.style.boxShadow = '0 0 30px #ff4444, 0 0 60px #ff0000';
 
   const gift = drawGift(tierIndex);
   if (!gift) { gameState.isDrawing = false; return; }
@@ -282,28 +298,48 @@ async function performDraw(tierIndex) {
 
   await sleep(1200);
 
-  // 开盒
+  // 开盒爆发
   dom.blindBox.classList.remove('shaking');
   dom.blindBox.classList.add('opening');
   dom.boxGlow.classList.add('flash');
+  dom.auraRing.classList.remove('active');
 
-  const boxRect = dom.blindBox.getBoundingClientRect();
-  const cx = boxRect.left + boxRect.width / 2;
-  const cy = boxRect.top + boxRect.height / 2;
+  const br = dom.blindBox.getBoundingClientRect();
+  const cx = br.left + br.width / 2;
+  const cy = br.top + br.height / 2;
 
-  spawnParticles(cx, cy, 16, rarity.color);
+  // 通用：光柱 + 脉冲 + 粒子 + 闪光粒子
+  spawnLightBeams(cx, cy, 8, rarity.color);
+  spawnRingPulse(cx, cy, rarity.color);
+  spawnParticles(cx, cy, 24, rarity.color);
+  spawnSparkles(cx, cy, 20, rarity.color);
 
-  if (gift.rarity === 'epic') spawnConfetti(40);
+  if (gift.rarity === 'rare') {
+    spawnRisingStars(cx, cy, 8, ['⭐', '✨', '💫']);
+  }
+
+  if (gift.rarity === 'epic') {
+    spawnConfetti(50);
+    spawnRisingStars(cx, cy, 16, ['⭐', '✨', '💫', '🌟', '💎']);
+    spawnRingPulse(cx, cy, '#FFD700');
+  }
+
   if (gift.rarity === 'legendary') {
-    spawnConfetti(80);
+    screenFlash('radial-gradient(circle, rgba(255,215,0,0.4), transparent)');
     screenShake();
-    setTimeout(() => spawnParticles(cx, cy, 30, '#FFD700'), 200);
-    setTimeout(() => spawnParticles(cx, cy, 20, '#E0001D'), 400);
-    setTimeout(() => spawnParticles(cx, cy, 20, '#00E5FF'), 600);
+    spawnConfetti(100);
+    spawnRisingStars(cx, cy, 30, ['⭐', '✨', '💫', '🌟', '💎', '👑', '🔥', '💥']);
+    setTimeout(() => { spawnLightBeams(cx, cy, 12, '#FFD700'); spawnRingPulse(cx, cy, '#FFD700'); spawnSparkles(cx, cy, 30, '#FFD700'); }, 300);
+    setTimeout(() => { spawnParticles(cx, cy, 40, '#E0001D'); spawnSparkles(cx, cy, 25, '#E0001D'); }, 500);
+    setTimeout(() => { spawnParticles(cx, cy, 30, '#00E5FF'); spawnRisingStars(cx, cy, 15, ['💎', '👑', '🔥']); }, 700);
   }
 
   await sleep(500);
   showResult(gift);
+
+  // 结果卡上再撒点粒子
+  const rc = dom.resultCard.getBoundingClientRect();
+  spawnSparkles(rc.left + rc.width / 2, rc.top + rc.height / 2, 10, rarity.color);
 
   gameState.history.unshift({ ...gift, tier: tierIndex, time: new Date().toISOString() });
   if (gameState.history.length > 50) gameState.history.length = 50;
@@ -322,25 +358,21 @@ async function performDraw(tierIndex) {
 }
 
 function showResult(gift) {
-  const rarity = RARITY_CONFIG[gift.rarity];
-  dom.resultRarity.textContent = rarity.label;
-  dom.resultRarity.style.color = rarity.color;
+  const r = RARITY_CONFIG[gift.rarity];
+  dom.resultRarity.textContent = r.label;
+  dom.resultRarity.style.color = r.color;
   dom.resultEmoji.textContent = gift.emoji;
   dom.resultName.textContent = gift.name;
-  dom.resultName.style.color = rarity.color;
-  dom.resultStars.textContent = rarity.stars;
-
+  dom.resultName.style.color = r.color;
+  dom.resultStars.textContent = r.stars;
   dom.resultCard.className = 'result-card';
   if (gift.rarity === 'rare') dom.resultCard.classList.add('rare-glow');
   if (gift.rarity === 'epic') dom.resultCard.classList.add('epic-glow');
   if (gift.rarity === 'legendary') dom.resultCard.classList.add('legendary-glow');
-
   dom.resultOverlay.classList.add('show');
 }
 
-function hideResult() {
-  dom.resultOverlay.classList.remove('show');
-}
+function hideResult() { dom.resultOverlay.classList.remove('show'); }
 
 // ===== 历史记录 =====
 function updateHistoryUI() {
@@ -348,34 +380,19 @@ function updateHistoryUI() {
     dom.historyList.innerHTML = '<p class="empty-hint">还没有抽奖记录，快来试试手气吧！</p>';
   } else {
     dom.historyList.innerHTML = gameState.history.map(h => {
-      const rarity = RARITY_CONFIG[h.rarity];
-      const time = new Date(h.time);
-      const timeStr = `${time.getMonth() + 1}/${time.getDate()} ${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
-      return `
-        <div class="history-item ${h.rarity}">
-          <span class="history-item-emoji">${h.emoji}</span>
-          <div class="history-item-info">
-            <div class="history-item-name">${h.name}</div>
-            <div class="history-item-rarity">${rarity.label} ${rarity.stars}</div>
-          </div>
-          <span class="history-item-time">${timeStr}</span>
-        </div>
-      `;
+      const r = RARITY_CONFIG[h.rarity];
+      const t = new Date(h.time);
+      const ts = `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+      return `<div class="history-item ${h.rarity}"><span class="history-item-emoji">${h.emoji}</span><div class="history-item-info"><div class="history-item-name">${h.name}</div><div class="history-item-rarity">${r.label} ${r.stars}</div></div><span class="history-item-time">${ts}</span></div>`;
     }).join('');
   }
-
   const total = gameState.history.length;
   const legendary = gameState.history.filter(h => h.rarity === 'legendary').length;
   const epic = gameState.history.filter(h => h.rarity === 'epic').length;
-  dom.historyStats.innerHTML = `
-    <div class="stat-item">总抽奖次数 <span>${total}</span></div>
-    <div class="stat-item">传说获得 <span>${legendary}</span></div>
-    <div class="stat-item">史诗获得 <span>${epic}</span></div>
-    <div class="stat-item">总消耗积分 <span>${gameState.history.reduce((s, h) => s + (gameState.drawTiers[h.tier]?.cost || 10), 0)}</span></div>
-  `;
+  dom.historyStats.innerHTML = `<div class="stat-item">总抽奖次数 <span>${total}</span></div><div class="stat-item">传说获得 <span>${legendary}</span></div><div class="stat-item">史诗获得 <span>${epic}</span></div><div class="stat-item">总消耗积分 <span>${gameState.history.reduce((s, h) => s + (gameState.drawTiers[h.tier]?.cost || 10), 0)}</span></div>`;
 }
 
-// ===== 设置面板 =====
+// ===== 设置 =====
 function renderTierSettings() {
   const list = $('#giftSettingsList');
   list.innerHTML = gameState.drawTiers.map((tier, ti) => `
@@ -393,43 +410,30 @@ function renderTierSettings() {
             <input class="gift-emoji-input" value="${g.emoji}" data-tier="${ti}" data-index="${gi}" data-field="emoji" maxlength="4">
             <input class="gift-name-input" value="${g.name}" data-tier="${ti}" data-index="${gi}" data-field="name" placeholder="奖品名称">
             <select data-tier="${ti}" data-index="${gi}" data-field="rarity">
-              ${Object.entries(RARITY_CONFIG).map(([k, v]) =>
-                `<option value="${k}" ${g.rarity === k ? 'selected' : ''}>${v.label}</option>`
-              ).join('')}
+              ${Object.entries(RARITY_CONFIG).map(([k,v]) => `<option value="${k}" ${g.rarity===k?'selected':''}>${v.label}</option>`).join('')}
             </select>
             <input class="gift-prob-input" type="number" value="${g.probability}" data-tier="${ti}" data-index="${gi}" data-field="probability" min="0" max="100" placeholder="概率%">
             <button class="btn-remove-gift" data-tier="${ti}" data-index="${gi}">✕</button>
-          </div>
-        `).join('')}
+          </div>`).join('')}
       </div>
       <button class="btn-add-gift-small" data-tier="${ti}">+ 添加奖品到此档</button>
-    </div>
-  `).join('');
+    </div>`).join('');
 
   updateProbChart();
 
-  // 绑定事件
   list.querySelectorAll('input, select').forEach(el => {
     el.addEventListener('input', () => {
-      const ti = parseInt(el.dataset.tier);
-      const gi = parseInt(el.dataset.index);
-      const field = el.dataset.field;
+      const ti = parseInt(el.dataset.tier), gi = parseInt(el.dataset.index), field = el.dataset.field;
       if (isNaN(ti)) return;
-      if (field === 'name' || field === 'cost') {
-        if (field === 'cost') gameState.drawTiers[ti].cost = parseInt(el.value) || 1;
-        else gameState.drawTiers[ti].name = el.value;
-      } else if (!isNaN(gi)) {
-        if (field === 'probability') gameState.drawTiers[ti].gifts[gi].probability = parseInt(el.value) || 0;
-        else gameState.drawTiers[ti].gifts[gi][field] = el.value;
-      }
+      if (field === 'name' || field === 'cost') { gameState.drawTiers[ti][field] = field === 'cost' ? (parseInt(el.value) || 1) : el.value; }
+      else if (!isNaN(gi)) { gameState.drawTiers[ti].gifts[gi][field] = field === 'probability' ? (parseInt(el.value) || 0) : el.value; }
       updateProbChart();
     });
   });
 
   list.querySelectorAll('.btn-remove-gift').forEach(btn => {
     btn.addEventListener('click', () => {
-      const ti = parseInt(btn.dataset.tier);
-      const gi = parseInt(btn.dataset.index);
+      const ti = parseInt(btn.dataset.tier), gi = parseInt(btn.dataset.index);
       if (isNaN(ti) || isNaN(gi)) return;
       if (gameState.drawTiers[ti].gifts.length <= 2) { alert('每档至少保留2个奖品'); return; }
       gameState.drawTiers[ti].gifts.splice(gi, 1);
@@ -461,66 +465,31 @@ function renderTierSettings() {
 function updateProbChart() {
   const chart = $('#probChart');
   chart.innerHTML = gameState.drawTiers.map((tier, ti) => {
-    const totalProb = tier.gifts.reduce((s, g) => s + g.probability, 0) || 1;
-    return `<div style="margin-bottom:6px;"><strong>${tier.name}</strong> (${tier.cost}分)
-      <div class="prob-chart-bars" style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-top:2px;">
-        ${tier.gifts.map(g => {
-          const pct = (g.probability / totalProb * 100);
-          return `<div style="flex:${pct || 0.001};background:${RARITY_CONFIG[g.rarity].color};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${pct.toFixed(0)}%</div>`;
-        }).join('')}
-      </div></div>`;
+    const total = tier.gifts.reduce((s, g) => s + g.probability, 0) || 1;
+    return `<div style="margin-bottom:6px;"><strong>${tier.name}</strong> (${tier.cost}分)<div class="prob-chart-bars" style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-top:2px;">${tier.gifts.map(g => { const pct = g.probability / total * 100; return `<div style="flex:${pct||.001};background:${RARITY_CONFIG[g.rarity].color};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${pct.toFixed(0)}%</div>`; }).join('')}</div></div>`;
   }).join('');
 }
 
 // ===== 背景粒子 =====
 function initBackgroundParticles() {
-  const canvas = dom.bgCanvas;
-  const ctx = canvas.getContext('2d');
+  const canvas = dom.bgCanvas, ctx = canvas.getContext('2d');
   let particles = [];
-  const maxParticles = 50;
-
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  resize(); window.addEventListener('resize', resize);
+  for (let i = 0; i < 50; i++) {
+    particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2 + 0.5, speedX: (Math.random() - 0.5) * 0.3, speedY: (Math.random() - 0.5) * 0.3, opacity: Math.random() * 0.3 + 0.05 });
   }
-  resize();
-  window.addEventListener('resize', resize);
-
-  for (let i = 0; i < maxParticles; i++) {
-    particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      size: Math.random() * 2 + 0.5,
-      speedX: (Math.random() - 0.5) * 0.3,
-      speedY: (Math.random() - 0.5) * 0.3,
-      opacity: Math.random() * 0.3 + 0.05,
-    });
-  }
-
   function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const p of particles) {
-      p.x += p.speedX;
-      p.y += p.speedY;
-      if (p.x < 0) p.x = canvas.width;
-      if (p.x > canvas.width) p.x = 0;
-      if (p.y < 0) p.y = canvas.height;
-      if (p.y > canvas.height) p.y = 0;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,255,255,${p.opacity})`;
-      ctx.fill();
+      p.x += p.speedX; p.y += p.speedY;
+      if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
+      if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${p.opacity})`; ctx.fill();
       for (const p2 of particles) {
-        const dx = p.x - p2.x;
-        const dy = p.y - p2.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 100) {
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-          ctx.lineTo(p2.x, p2.y);
-          ctx.strokeStyle = `rgba(255,255,255,${0.03 * (1 - dist / 100)})`;
-          ctx.stroke();
-        }
+        const dx = p.x - p2.x, dy = p.y - p2.y, dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 100) { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = `rgba(255,255,255,${0.03*(1-dist/100)})`; ctx.stroke(); }
       }
     }
     requestAnimationFrame(animate);
@@ -528,47 +497,28 @@ function initBackgroundParticles() {
   animate();
 }
 
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ===== 事件绑定 =====
+// ===== 事件 =====
 function bindEvents() {
-  // 结果关闭
   dom.resultClose.addEventListener('click', hideResult);
-  dom.resultOverlay.addEventListener('click', (e) => {
-    if (e.target === dom.resultOverlay) hideResult();
-  });
+  dom.resultOverlay.addEventListener('click', e => { if (e.target === dom.resultOverlay) hideResult(); });
 
-  // 历史侧边栏
-  $('#btnHistory').addEventListener('click', () => {
-    updateHistoryUI();
-    dom.historySidebar.classList.add('open');
-  });
-  $('#btnHistoryClose').addEventListener('click', () => {
-    dom.historySidebar.classList.remove('open');
-  });
+  $('#btnHistory').addEventListener('click', () => { updateHistoryUI(); dom.historySidebar.classList.add('open'); });
+  $('#btnHistoryClose').addEventListener('click', () => { dom.historySidebar.classList.remove('open'); });
+  $('#btnGoTracker').addEventListener('click', () => { window.location.href = 'kids-points-tracker.html'; });
 
-  $('#btnGoTracker').addEventListener('click', () => {
-    window.location.href = 'kids-points-tracker.html';
-  });
-
-  // 设置
   $('#btnSettings').addEventListener('click', () => {
     $('#setDailyReward').value = gameState.dailyReward;
     renderTierSettings();
     dom.settingsOverlay.classList.add('show');
   });
-  $('#btnSettingsClose').addEventListener('click', () => {
-    dom.settingsOverlay.classList.remove('show');
-  });
-  dom.settingsOverlay.addEventListener('click', (e) => {
-    if (e.target === dom.settingsOverlay) dom.settingsOverlay.classList.remove('show');
-  });
+  $('#btnSettingsClose').addEventListener('click', () => { dom.settingsOverlay.classList.remove('show'); });
+  dom.settingsOverlay.addEventListener('click', e => { if (e.target === dom.settingsOverlay) dom.settingsOverlay.classList.remove('show'); });
 
   $('#btnSaveSettings').addEventListener('click', () => {
     gameState.dailyReward = parseInt($('#setDailyReward').value) || 0;
-    saveState();
-    updateAllUI();
-    dom.settingsOverlay.classList.remove('show');
+    saveState(); updateAllUI(); dom.settingsOverlay.classList.remove('show');
   });
 
   $('#btnResetDefault').addEventListener('click', () => {
@@ -576,10 +526,7 @@ function bindEvents() {
     gameState.dailyReward = DEFAULT_DAILY_REWARD;
     gameState.drawTiers = JSON.parse(JSON.stringify(DEFAULT_TIERS));
     gameState.history = [];
-    saveState();
-    updateAllUI();
-    renderTierSettings();
-    dom.settingsOverlay.classList.remove('show');
+    saveState(); updateAllUI(); renderTierSettings(); dom.settingsOverlay.classList.remove('show');
   });
 
   $('#btnAddTier').addEventListener('click', () => {
@@ -590,84 +537,62 @@ function bindEvents() {
     renderTierSettings();
   });
 
-  // 每日签到
   $('#btnDaily').addEventListener('click', () => {
     const today = new Date().toDateString();
-    if (gameState.lastDailyDate === today) {
-      alert('今天已经签到过了，明天再来吧！');
-      return;
-    }
+    if (gameState.lastDailyDate === today) { alert('今天已经签到过了，明天再来吧！'); return; }
     gameState.lastDailyDate = today;
     gameState.points += gameState.dailyReward;
     $('#dailyRewardAmount').textContent = gameState.dailyReward;
     dom.dailyOverlay.classList.add('show');
-    updateAllUI();
-    saveState();
+    updateAllUI(); saveState();
   });
-  $('#dailyClose').addEventListener('click', () => {
-    dom.dailyOverlay.classList.remove('show');
-  });
-  dom.dailyOverlay.addEventListener('click', (e) => {
-    if (e.target === dom.dailyOverlay) dom.dailyOverlay.classList.remove('show');
-  });
+  $('#dailyClose').addEventListener('click', () => { dom.dailyOverlay.classList.remove('show'); });
+  dom.dailyOverlay.addEventListener('click', e => { if (e.target === dom.dailyOverlay) dom.dailyOverlay.classList.remove('show'); });
 
-  // 全量导出
   $('#btnExportAll').addEventListener('click', () => {
     const data = getFullExportData();
     if (!data) { alert('数据未加载'); return; }
-    data.exportTime = new Date().toISOString();
-    data.version = '2.0';
+    data.exportTime = new Date().toISOString(); data.version = '2.0';
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const date = new Date();
-    const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
+    const d = new Date();
     const a = document.createElement('a');
-    a.href = url; a.download = `全量备份_${dateStr}.json`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `全量备份_${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   });
 
   $('#btnImportAll').addEventListener('click', () => { $('#importAllFile').click(); });
-  $('#importAllFile').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  $('#importAllFile').addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = async function(ev) {
       try {
         const data = JSON.parse(ev.target.result);
-        if (!data.blindBox && !data.tracker) { alert('❌ 无效的备份文件格式！'); return; }
-        if (!confirm(`确定恢复备份？\n⭐ 积分: ${data.sharedPoints ?? '未知'}\n⚠️ 将覆盖所有数据！`)) { e.target.value = ''; return; }
-        const res = await fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        if (!data.blindBox && !data.tracker) { alert('无效的备份文件格式！'); return; }
+        if (!confirm(`确定恢复备份？\n积分: ${data.sharedPoints ?? '未知'}\n将覆盖所有数据！`)) { e.target.value = ''; return; }
+        const res = await fetch('/family/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         if (!res.ok) throw new Error('Server error');
-        alert('✅ 恢复成功！页面将刷新。');
-        location.reload();
-      } catch (err) { alert('❌ 恢复失败: ' + err.message); }
+        alert('恢复成功！页面将刷新。'); location.reload();
+      } catch (err) { alert('恢复失败: ' + err.message); }
       e.target.value = '';
     };
     reader.readAsText(file);
   });
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      hideResult();
-      dom.historySidebar.classList.remove('open');
-      dom.settingsOverlay.classList.remove('show');
-      dom.dailyOverlay.classList.remove('show');
-    }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { hideResult(); dom.historySidebar.classList.remove('open'); dom.settingsOverlay.classList.remove('show'); dom.dailyOverlay.classList.remove('show'); }
   });
 
   window.addEventListener('beforeunload', () => { saveAppDataNow(); });
 }
 
-// ===== 初始化 =====
 async function init() {
   try {
     await loadAppData();
     $('#syncStatus').textContent = '🟢 已连接';
   } catch (e) {
-    console.error('服务器连接失败:', e.message);
     $('#syncStatus').textContent = '🔴 未连接';
-    alert('⚠️ 无法连接到服务器，请确认服务器已启动。\n\n' + e.message);
+    alert('无法连接到服务器，请确认服务器已启动。\n\n' + e.message);
     return;
   }
   loadState();

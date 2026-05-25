@@ -23,17 +23,33 @@ DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.json'
 DEFAULT_DATA = {
     "sharedPoints": 6,
     "blindBox": {
-        "drawCost": 10,
         "dailyReward": 1,
         "lastDailyDate": None,
-        "gifts": [
-            {"id": 1, "name": "能量金币", "emoji": "🪙", "rarity": "common", "probability": 40},
-            {"id": 2, "name": "光之水晶", "emoji": "💎", "rarity": "common", "probability": 25},
-            {"id": 3, "name": "怪兽卡片", "emoji": "🃏", "rarity": "rare", "probability": 15},
-            {"id": 4, "name": "等离子火花", "emoji": "⚡", "rarity": "rare", "probability": 10},
-            {"id": 5, "name": "奥特勋章", "emoji": "🏅", "rarity": "epic", "probability": 6},
-            {"id": 6, "name": "变身器碎片", "emoji": "🌟", "rarity": "epic", "probability": 3},
-            {"id": 7, "name": "M78星云宝石", "emoji": "🔮", "rarity": "legendary", "probability": 1},
+        "drawTiers": [
+            {
+                "name": "普通盲盒", "cost": 10,
+                "gifts": [
+                    {"id": 1, "name": "能量金币", "emoji": "🪙", "rarity": "common", "probability": 35},
+                    {"id": 2, "name": "光之水晶", "emoji": "💎", "rarity": "common", "probability": 25},
+                    {"id": 3, "name": "怪兽卡片", "emoji": "🃏", "rarity": "rare", "probability": 20},
+                    {"id": 4, "name": "等离子火花", "emoji": "⚡", "rarity": "rare", "probability": 10},
+                    {"id": 5, "name": "奥特勋章", "emoji": "🏅", "rarity": "epic", "probability": 7},
+                    {"id": 6, "name": "变身器碎片", "emoji": "🌟", "rarity": "epic", "probability": 2},
+                    {"id": 7, "name": "M78星云宝石", "emoji": "🔮", "rarity": "legendary", "probability": 1}
+                ]
+            },
+            {
+                "name": "高级盲盒", "cost": 30,
+                "gifts": [
+                    {"id": 1, "name": "能量金币", "emoji": "🪙", "rarity": "common", "probability": 10},
+                    {"id": 2, "name": "光之水晶", "emoji": "💎", "rarity": "common", "probability": 10},
+                    {"id": 3, "name": "怪兽卡片", "emoji": "🃏", "rarity": "rare", "probability": 20},
+                    {"id": 4, "name": "等离子火花", "emoji": "⚡", "rarity": "rare", "probability": 15},
+                    {"id": 5, "name": "奥特勋章", "emoji": "🏅", "rarity": "epic", "probability": 20},
+                    {"id": 6, "name": "变身器碎片", "emoji": "🌟", "rarity": "epic", "probability": 15},
+                    {"id": 7, "name": "M78星云宝石", "emoji": "🔮", "rarity": "legendary", "probability": 10}
+                ]
+            }
         ],
         "history": []
     },
