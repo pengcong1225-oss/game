@@ -121,11 +121,6 @@ def index():
     return send_from_directory('.', 'index.html')
 
 
-@app.route('/<path:path>')
-def static_files(path):
-    return send_from_directory('.', path)
-
-
 @app.route('/family/api/data', methods=['GET'])
 def get_data():
     data = load_data()
@@ -184,6 +179,11 @@ def health():
         "sharedPoints": data.get('sharedPoints', 0),
     })
 
+
+# 兜底静态文件路由 — 必须在所有 API 之后注册
+@app.route('/<path:path>')
+def static_files(path):
+    return send_from_directory('.', path)
 
 if __name__ == '__main__':
     print("🚀 奥特曼盲盒服务器启动中...")

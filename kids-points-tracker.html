@@ -1074,6 +1074,7 @@
                 records.push({ id: Date.now(), goalId: goal.id, name: goal.name, points: goal.points, icon: goal.icon, time: new Date().toISOString(), note: '' });
             }
             saveData();
+            renderGoals();
             renderRecords();
             updateStats();
             showSuccess('✅');
@@ -1084,6 +1085,10 @@
             const goalId = parseInt(document.getElementById('taskSelect').value);
             const goal = goals.find(g => g.id === goalId);
             if (!goal) return;
+            if (isTaskCompletedToday(goalId)) {
+                alert('该任务今日已完成，明天再来吧！');
+                return;
+            }
             const time = document.getElementById('completeTime').value;
             const note = document.getElementById('recordNote').value.trim();
             const record = { id: Date.now(), goalId: goal.id, name: goal.name, points: goal.points, icon: goal.icon, time: new Date(time).toISOString(), note };
