@@ -1,16 +1,32 @@
-// ===== 默认配置（仅首次使用）=====
-const DEFAULT_GIFTS = [
-  { id: 1, name: '能量金币', emoji: '🪙', rarity: 'common', probability: 40 },
-  { id: 2, name: '光之水晶', emoji: '💎', rarity: 'common', probability: 25 },
-  { id: 3, name: '怪兽卡片', emoji: '🃏', rarity: 'rare', probability: 15 },
-  { id: 4, name: '等离子火花', emoji: '⚡', rarity: 'rare', probability: 10 },
-  { id: 5, name: '奥特勋章', emoji: '🏅', rarity: 'epic', probability: 6 },
-  { id: 6, name: '变身器碎片', emoji: '🌟', rarity: 'epic', probability: 3 },
-  { id: 7, name: 'M78星云宝石', emoji: '🔮', rarity: 'legendary', probability: 1 },
+// ===== 默认配置（多档盲盒）=====
+const DEFAULT_TIERS = [
+  {
+    name: '普通盲盒', cost: 10,
+    gifts: [
+      { id: 1, name: '能量金币', emoji: '🪙', rarity: 'common', probability: 35 },
+      { id: 2, name: '光之水晶', emoji: '💎', rarity: 'common', probability: 25 },
+      { id: 3, name: '怪兽卡片', emoji: '🃏', rarity: 'rare', probability: 20 },
+      { id: 4, name: '等离子火花', emoji: '⚡', rarity: 'rare', probability: 10 },
+      { id: 5, name: '奥特勋章', emoji: '🏅', rarity: 'epic', probability: 7 },
+      { id: 6, name: '变身器碎片', emoji: '🌟', rarity: 'epic', probability: 2 },
+      { id: 7, name: 'M78星云宝石', emoji: '🔮', rarity: 'legendary', probability: 1 },
+    ]
+  },
+  {
+    name: '高级盲盒', cost: 30,
+    gifts: [
+      { id: 1, name: '能量金币', emoji: '🪙', rarity: 'common', probability: 10 },
+      { id: 2, name: '光之水晶', emoji: '💎', rarity: 'common', probability: 10 },
+      { id: 3, name: '怪兽卡片', emoji: '🃏', rarity: 'rare', probability: 20 },
+      { id: 4, name: '等离子火花', emoji: '⚡', rarity: 'rare', probability: 15 },
+      { id: 5, name: '奥特勋章', emoji: '🏅', rarity: 'epic', probability: 20 },
+      { id: 6, name: '变身器碎片', emoji: '🌟', rarity: 'epic', probability: 15 },
+      { id: 7, name: 'M78星云宝石', emoji: '🔮', rarity: 'legendary', probability: 10 },
+    ]
+  }
 ];
 
 const DEFAULT_POINTS = 100;
-const DEFAULT_DRAW_COST = 10;
 const DEFAULT_DAILY_REWARD = 1;
 
 const RARITY_CONFIG = {
@@ -23,9 +39,9 @@ const RARITY_CONFIG = {
 // ===== 游戏状态 =====
 let gameState = {
   points: DEFAULT_POINTS,
-  drawCost: DEFAULT_DRAW_COST,
   dailyReward: DEFAULT_DAILY_REWARD,
-  gifts: JSON.parse(JSON.stringify(DEFAULT_GIFTS)),
+  drawTiers: JSON.parse(JSON.stringify(DEFAULT_TIERS)),
+  activeTier: 0,      // 当前选中的档位
   history: [],
   isDrawing: false,
   lastDailyDate: null,
@@ -36,7 +52,7 @@ const $ = (sel) => document.querySelector(sel);
 
 const dom = {
   pointsValue: $('#pointsValue'),
-  drawCost: $('#drawCost'),
+  drawButtons: $('#drawButtons'),
   drawBtn: $('#drawBtn'),
   blindBox: $('#blindBox'),
   auraRing: $('#auraRing'),
@@ -61,27 +77,33 @@ const dom = {
   bgCanvas: $('#bgCanvas'),
 };
 
-// ===== 数据读写（通过服务端）=====
+// ===== 数据读写 =====
 function loadState() {
   const pts = getPoints();
   gameState.points = (pts !== null && pts >= 0) ? pts : DEFAULT_POINTS;
 
   const bb = getBlindBox();
   if (bb) {
-    gameState.drawCost = bb.drawCost ?? DEFAULT_DRAW_COST;
     gameState.dailyReward = bb.dailyReward ?? DEFAULT_DAILY_REWARD;
-    gameState.gifts = bb.gifts?.length ? bb.gifts : JSON.parse(JSON.stringify(DEFAULT_GIFTS));
     gameState.history = bb.history ?? [];
     gameState.lastDailyDate = bb.lastDailyDate ?? null;
+
+    // 兼容旧格式（单礼品池）→ 转为多档
+    if (bb.drawTiers?.length) {
+      gameState.drawTiers = bb.drawTiers;
+    } else if (bb.gifts?.length) {
+      gameState.drawTiers = [{ name: '盲盒', cost: bb.drawCost || 10, gifts: bb.gifts }];
+    } else {
+      gameState.drawTiers = JSON.parse(JSON.stringify(DEFAULT_TIERS));
+    }
   }
 }
 
 function saveState() {
   setPoints(gameState.points);
   saveBlindBox({
-    drawCost: gameState.drawCost,
     dailyReward: gameState.dailyReward,
-    gifts: gameState.gifts,
+    drawTiers: gameState.drawTiers,
     history: gameState.history.slice(-50),
     lastDailyDate: gameState.lastDailyDate,
   });
@@ -95,13 +117,42 @@ function updatePoints() {
   dom.pointsValue.classList.add('bump');
 }
 
-function updateDrawButton() {
-  dom.drawCost.textContent = gameState.drawCost;
-  dom.drawBtn.disabled = gameState.points < gameState.drawCost || gameState.isDrawing;
+function updateDrawButtons() {
+  dom.drawButtons.innerHTML = gameState.drawTiers.map((tier, i) => {
+    const canAfford = gameState.points >= tier.cost;
+    return `
+      <button class="draw-btn tier-btn tier-${i}"
+              ${!canAfford || gameState.isDrawing ? 'disabled' : ''}
+              data-tier="${i}">
+        <span class="draw-btn-text">🎁 ${tier.name} · <strong>${tier.cost}</strong> 积分</span>
+        <span class="draw-btn-sub">
+          ${getTierRarityPreview(tier)}
+        </span>
+      </button>`;
+  }).join('');
+
+  // 绑定点击事件
+  dom.drawButtons.querySelectorAll('.tier-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ti = parseInt(btn.dataset.tier);
+      if (!isNaN(ti)) performDraw(ti);
+    });
+  });
+}
+
+function getTierRarityPreview(tier) {
+  const rarities = { common: 0, rare: 0, epic: 0, legendary: 0 };
+  tier.gifts.forEach(g => { rarities[g.rarity] += g.probability; });
+  const total = Object.values(rarities).reduce((s, v) => s + v, 0) || 1;
+  const legendaryPct = (rarities.legendary / total * 100).toFixed(0);
+  const epicPct = (rarities.epic / total * 100).toFixed(0);
+  return `传说 ${legendaryPct}% · 史诗 ${epicPct}%`;
 }
 
 function updatePrizeGrid() {
-  dom.prizeGrid.innerHTML = gameState.gifts.map(g => `
+  const tier = gameState.drawTiers[gameState.activeTier] || gameState.drawTiers[0];
+  if (!tier) return;
+  dom.prizeGrid.innerHTML = tier.gifts.map(g => `
     <div class="prize-card" data-rarity="${g.rarity}">
       <span class="prize-emoji">${g.emoji}</span>
       <span class="prize-name">${g.name}</span>
@@ -111,21 +162,42 @@ function updatePrizeGrid() {
   `).join('');
 }
 
+// 档位切换标签
+function updateTierTabs() {
+  const tabs = $('#tierTabs');
+  if (!tabs) return;
+  tabs.innerHTML = gameState.drawTiers.map((tier, i) => `
+    <span class="tier-tab ${i === gameState.activeTier ? 'active' : ''}" data-tier="${i}">
+      ${tier.name} · ${tier.cost}分
+    </span>
+  `).join('');
+  tabs.querySelectorAll('.tier-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      gameState.activeTier = parseInt(tab.dataset.tier);
+      updateTierTabs();
+      updatePrizeGrid();
+    });
+  });
+}
+
 function updateAllUI() {
   updatePoints();
-  updateDrawButton();
+  updateDrawButtons();
+  updateTierTabs();
   updatePrizeGrid();
 }
 
-// ===== 概率抽奖算法 =====
-function drawGift() {
-  const totalProb = gameState.gifts.reduce((sum, g) => sum + g.probability, 0);
+// ===== 概率抽奖 =====
+function drawGift(tierIndex) {
+  const tier = gameState.drawTiers[tierIndex];
+  if (!tier) return null;
+  const totalProb = tier.gifts.reduce((sum, g) => sum + g.probability, 0);
   let rand = Math.random() * totalProb;
-  for (const gift of gameState.gifts) {
+  for (const gift of tier.gifts) {
     rand -= gift.probability;
     if (rand <= 0) return gift;
   }
-  return gameState.gifts[gameState.gifts.length - 1];
+  return tier.gifts[tier.gifts.length - 1];
 }
 
 // ===== 特效系统 =====
@@ -185,15 +257,17 @@ function screenShake() {
 }
 
 // ===== 抽奖流程 =====
-async function performDraw() {
+async function performDraw(tierIndex) {
   if (gameState.isDrawing) return;
-  if (gameState.points < gameState.drawCost) return;
+  const tier = gameState.drawTiers[tierIndex];
+  if (!tier) return;
+  if (gameState.points < tier.cost) return;
 
   gameState.isDrawing = true;
-  gameState.points -= gameState.drawCost;
+  gameState.activeTier = tierIndex;
+  gameState.points -= tier.cost;
   updatePoints();
-  updateDrawButton();
-  saveState();
+  updateDrawButtons();
 
   // 盲盒震动
   dom.blindBox.classList.add('shaking');
@@ -202,12 +276,13 @@ async function performDraw() {
   dom.colorTimer.style.background = '#ff4444';
   dom.colorTimer.style.boxShadow = '0 0 20px #ff4444';
 
-  const gift = drawGift();
+  const gift = drawGift(tierIndex);
+  if (!gift) { gameState.isDrawing = false; return; }
   const rarity = RARITY_CONFIG[gift.rarity];
 
   await sleep(1200);
 
-  // 开盒闪光
+  // 开盒
   dom.blindBox.classList.remove('shaking');
   dom.blindBox.classList.add('opening');
   dom.boxGlow.classList.add('flash');
@@ -218,10 +293,7 @@ async function performDraw() {
 
   spawnParticles(cx, cy, 16, rarity.color);
 
-  if (gift.rarity === 'epic') {
-    spawnConfetti(40);
-  }
-
+  if (gift.rarity === 'epic') spawnConfetti(40);
   if (gift.rarity === 'legendary') {
     spawnConfetti(80);
     screenShake();
@@ -233,8 +305,7 @@ async function performDraw() {
   await sleep(500);
   showResult(gift);
 
-  // 记录历史
-  gameState.history.unshift({ ...gift, time: new Date().toISOString() });
+  gameState.history.unshift({ ...gift, tier: tierIndex, time: new Date().toISOString() });
   if (gameState.history.length > 50) gameState.history.length = 50;
   saveState();
 
@@ -247,7 +318,7 @@ async function performDraw() {
   dom.colorTimer.style.boxShadow = '';
 
   gameState.isDrawing = false;
-  updateDrawButton();
+  updateDrawButtons();
 }
 
 function showResult(gift) {
@@ -300,69 +371,108 @@ function updateHistoryUI() {
     <div class="stat-item">总抽奖次数 <span>${total}</span></div>
     <div class="stat-item">传说获得 <span>${legendary}</span></div>
     <div class="stat-item">史诗获得 <span>${epic}</span></div>
-    <div class="stat-item">总消耗积分 <span>${total * gameState.drawCost}</span></div>
+    <div class="stat-item">总消耗积分 <span>${gameState.history.reduce((s, h) => s + (gameState.drawTiers[h.tier]?.cost || 10), 0)}</span></div>
   `;
 }
 
 // ===== 设置面板 =====
-function renderGiftSettings() {
+function renderTierSettings() {
   const list = $('#giftSettingsList');
-  list.innerHTML = gameState.gifts.map((g, i) => `
-    <div class="gift-setting-item">
-      <input class="gift-emoji-input" value="${g.emoji}" data-index="${i}" data-field="emoji" maxlength="4">
-      <input class="gift-name-input" value="${g.name}" data-index="${i}" data-field="name" placeholder="奖品名称">
-      <select data-index="${i}" data-field="rarity">
-        ${Object.entries(RARITY_CONFIG).map(([k, v]) =>
-          `<option value="${k}" ${g.rarity === k ? 'selected' : ''}>${v.label}</option>`
-        ).join('')}
-      </select>
-      <input class="gift-prob-input" type="number" value="${g.probability}" data-index="${i}" data-field="probability" min="0" max="100" placeholder="概率%">
-      <button class="btn-remove-gift" data-index="${i}">✕</button>
+  list.innerHTML = gameState.drawTiers.map((tier, ti) => `
+    <div class="tier-settings-group">
+      <div class="tier-settings-header">
+        <input value="${tier.name}" data-tier="${ti}" data-field="name" class="tier-name-input" placeholder="档位名称">
+        <span class="tier-cost-label">消耗</span>
+        <input type="number" value="${tier.cost}" data-tier="${ti}" data-field="cost" class="tier-cost-input" min="1">
+        <span class="tier-cost-label">积分</span>
+        <button class="btn-remove-tier" data-tier="${ti}">✕</button>
+      </div>
+      <div class="tier-gift-list">
+        ${tier.gifts.map((g, gi) => `
+          <div class="gift-setting-item">
+            <input class="gift-emoji-input" value="${g.emoji}" data-tier="${ti}" data-index="${gi}" data-field="emoji" maxlength="4">
+            <input class="gift-name-input" value="${g.name}" data-tier="${ti}" data-index="${gi}" data-field="name" placeholder="奖品名称">
+            <select data-tier="${ti}" data-index="${gi}" data-field="rarity">
+              ${Object.entries(RARITY_CONFIG).map(([k, v]) =>
+                `<option value="${k}" ${g.rarity === k ? 'selected' : ''}>${v.label}</option>`
+              ).join('')}
+            </select>
+            <input class="gift-prob-input" type="number" value="${g.probability}" data-tier="${ti}" data-index="${gi}" data-field="probability" min="0" max="100" placeholder="概率%">
+            <button class="btn-remove-gift" data-tier="${ti}" data-index="${gi}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn-add-gift-small" data-tier="${ti}">+ 添加奖品到此档</button>
     </div>
   `).join('');
 
   updateProbChart();
+
+  // 绑定事件
+  list.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', () => {
+      const ti = parseInt(el.dataset.tier);
+      const gi = parseInt(el.dataset.index);
+      const field = el.dataset.field;
+      if (isNaN(ti)) return;
+      if (field === 'name' || field === 'cost') {
+        if (field === 'cost') gameState.drawTiers[ti].cost = parseInt(el.value) || 1;
+        else gameState.drawTiers[ti].name = el.value;
+      } else if (!isNaN(gi)) {
+        if (field === 'probability') gameState.drawTiers[ti].gifts[gi].probability = parseInt(el.value) || 0;
+        else gameState.drawTiers[ti].gifts[gi][field] = el.value;
+      }
+      updateProbChart();
+    });
+  });
+
+  list.querySelectorAll('.btn-remove-gift').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ti = parseInt(btn.dataset.tier);
+      const gi = parseInt(btn.dataset.index);
+      if (isNaN(ti) || isNaN(gi)) return;
+      if (gameState.drawTiers[ti].gifts.length <= 2) { alert('每档至少保留2个奖品'); return; }
+      gameState.drawTiers[ti].gifts.splice(gi, 1);
+      renderTierSettings();
+    });
+  });
+
+  list.querySelectorAll('.btn-remove-tier').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ti = parseInt(btn.dataset.tier);
+      if (isNaN(ti)) return;
+      if (gameState.drawTiers.length <= 1) { alert('至少保留1个档位'); return; }
+      gameState.drawTiers.splice(ti, 1);
+      renderTierSettings();
+    });
+  });
+
+  list.querySelectorAll('.btn-add-gift-small').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ti = parseInt(btn.dataset.tier);
+      if (isNaN(ti)) return;
+      const newId = Math.max(0, ...gameState.drawTiers[ti].gifts.map(g => g.id)) + 1;
+      gameState.drawTiers[ti].gifts.push({ id: newId, name: '新奖品', emoji: '🎁', rarity: 'common', probability: 5 });
+      renderTierSettings();
+    });
+  });
 }
 
 function updateProbChart() {
   const chart = $('#probChart');
-  chart.innerHTML = gameState.gifts.map(g => {
-    const totalProb = gameState.gifts.reduce((s, g2) => s + g2.probability, 0);
-    const pct = totalProb > 0 ? (g.probability / totalProb * 100) : 0;
-    return `<div class="prob-bar" style="flex:${pct || 0.001}; background:${RARITY_CONFIG[g.rarity].color};">${pct.toFixed(0)}%</div>`;
+  chart.innerHTML = gameState.drawTiers.map((tier, ti) => {
+    const totalProb = tier.gifts.reduce((s, g) => s + g.probability, 0) || 1;
+    return `<div style="margin-bottom:6px;"><strong>${tier.name}</strong> (${tier.cost}分)
+      <div class="prob-chart-bars" style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-top:2px;">
+        ${tier.gifts.map(g => {
+          const pct = (g.probability / totalProb * 100);
+          return `<div style="flex:${pct || 0.001};background:${RARITY_CONFIG[g.rarity].color};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${pct.toFixed(0)}%</div>`;
+        }).join('')}
+      </div></div>`;
   }).join('');
 }
 
-function bindGiftSettingsEvents() {
-  const list = $('#giftSettingsList');
-
-  list.addEventListener('input', (e) => {
-    const idx = parseInt(e.target.dataset.index);
-    const field = e.target.dataset.field;
-    if (isNaN(idx)) return;
-    if (field === 'probability') {
-      gameState.gifts[idx][field] = parseInt(e.target.value) || 0;
-    } else {
-      gameState.gifts[idx][field] = e.target.value;
-    }
-    updateProbChart();
-  });
-
-  list.addEventListener('click', (e) => {
-    if (e.target.classList.contains('btn-remove-gift')) {
-      const idx = parseInt(e.target.dataset.index);
-      if (isNaN(idx)) return;
-      if (gameState.gifts.length <= 2) {
-        alert('至少保留2个奖品');
-        return;
-      }
-      gameState.gifts.splice(idx, 1);
-      renderGiftSettings();
-    }
-  });
-}
-
-// ===== 背景粒子系统 =====
+// ===== 背景粒子 =====
 function initBackgroundParticles() {
   const canvas = dom.bgCanvas;
   const ctx = canvas.getContext('2d');
@@ -389,21 +499,17 @@ function initBackgroundParticles() {
 
   function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     for (const p of particles) {
       p.x += p.speedX;
       p.y += p.speedY;
-
       if (p.x < 0) p.x = canvas.width;
       if (p.x > canvas.width) p.x = 0;
       if (p.y < 0) p.y = canvas.height;
       if (p.y > canvas.height) p.y = 0;
-
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(255,255,255,${p.opacity})`;
       ctx.fill();
-
       for (const p2 of particles) {
         const dx = p.x - p2.x;
         const dy = p.y - p2.y;
@@ -417,22 +523,15 @@ function initBackgroundParticles() {
         }
       }
     }
-
     requestAnimationFrame(animate);
   }
   animate();
 }
 
-// ===== 工具函数 =====
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 // ===== 事件绑定 =====
 function bindEvents() {
-  // 抽奖
-  dom.drawBtn.addEventListener('click', performDraw);
-
   // 结果关闭
   dom.resultClose.addEventListener('click', hideResult);
   dom.resultOverlay.addEventListener('click', (e) => {
@@ -448,18 +547,14 @@ function bindEvents() {
     dom.historySidebar.classList.remove('open');
   });
 
-  // 跳转任务页
   $('#btnGoTracker').addEventListener('click', () => {
     window.location.href = 'kids-points-tracker.html';
   });
 
   // 设置
   $('#btnSettings').addEventListener('click', () => {
-    $('#setPoints').value = gameState.points;
-    $('#setDrawCost').value = gameState.drawCost;
     $('#setDailyReward').value = gameState.dailyReward;
-    renderGiftSettings();
-    bindGiftSettingsEvents();
+    renderTierSettings();
     dom.settingsOverlay.classList.add('show');
   });
   $('#btnSettingsClose').addEventListener('click', () => {
@@ -469,37 +564,30 @@ function bindEvents() {
     if (e.target === dom.settingsOverlay) dom.settingsOverlay.classList.remove('show');
   });
 
-  // 保存设置
   $('#btnSaveSettings').addEventListener('click', () => {
-    gameState.points = parseInt($('#setPoints').value) || 0;
-    gameState.drawCost = parseInt($('#setDrawCost').value) || 1;
     gameState.dailyReward = parseInt($('#setDailyReward').value) || 0;
     saveState();
     updateAllUI();
-    renderGiftSettings();
-    bindGiftSettingsEvents();
     dom.settingsOverlay.classList.remove('show');
   });
 
-  // 恢复默认
   $('#btnResetDefault').addEventListener('click', () => {
     if (!confirm('确定要恢复默认设置吗？奖品池和抽奖记录将被重置，积分保持不变。')) return;
-    gameState.drawCost = DEFAULT_DRAW_COST;
     gameState.dailyReward = DEFAULT_DAILY_REWARD;
-    gameState.gifts = JSON.parse(JSON.stringify(DEFAULT_GIFTS));
+    gameState.drawTiers = JSON.parse(JSON.stringify(DEFAULT_TIERS));
     gameState.history = [];
     saveState();
     updateAllUI();
-    renderGiftSettings();
-    bindGiftSettingsEvents();
+    renderTierSettings();
+    dom.settingsOverlay.classList.remove('show');
   });
 
-  // 添加奖品
-  $('#btnAddGift').addEventListener('click', () => {
-    const newId = Math.max(0, ...gameState.gifts.map(g => g.id)) + 1;
-    gameState.gifts.push({ id: newId, name: '新奖品', emoji: '🎁', rarity: 'common', probability: 5 });
-    renderGiftSettings();
-    bindGiftSettingsEvents();
+  $('#btnAddTier').addEventListener('click', () => {
+    gameState.drawTiers.push({ name: '新档位', cost: 20, gifts: [
+      { id: 1, name: '普通礼物', emoji: '🎁', rarity: 'common', probability: 50 },
+      { id: 2, name: '稀有礼物', emoji: '✨', rarity: 'rare', probability: 50 },
+    ]});
+    renderTierSettings();
   });
 
   // 每日签到
@@ -534,18 +622,12 @@ function bindEvents() {
     const date = new Date();
     const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}`;
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `全量备份_${dateStr}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    a.href = url; a.download = `全量备份_${dateStr}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   });
 
-  // 全量导入
-  $('#btnImportAll').addEventListener('click', () => {
-    $('#importAllFile').click();
-  });
+  $('#btnImportAll').addEventListener('click', () => { $('#importAllFile').click(); });
   $('#importAllFile').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -553,36 +635,18 @@ function bindEvents() {
     reader.onload = async function(ev) {
       try {
         const data = JSON.parse(ev.target.result);
-        if (!data.blindBox && !data.tracker) {
-          alert('❌ 无效的备份文件格式！');
-          return;
-        }
-        const confirmMsg = `确定要恢复全量备份吗？\n\n` +
-          `📅 备份时间: ${data.exportTime ? new Date(data.exportTime).toLocaleString('zh-CN') : '未知'}\n` +
-          `⭐ 可用积分: ${data.sharedPoints ?? '未知'}\n\n` +
-          `⚠️ 这将覆盖当前所有数据！`;
-        if (!confirm(confirmMsg)) { e.target.value = ''; return; }
-
-        const res = await fetch('/api/data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
+        if (!data.blindBox && !data.tracker) { alert('❌ 无效的备份文件格式！'); return; }
+        if (!confirm(`确定恢复备份？\n⭐ 积分: ${data.sharedPoints ?? '未知'}\n⚠️ 将覆盖所有数据！`)) { e.target.value = ''; return; }
+        const res = await fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         if (!res.ok) throw new Error('Server error');
-        alert('✅ 数据恢复成功！页面将刷新。');
+        alert('✅ 恢复成功！页面将刷新。');
         location.reload();
-      } catch (err) {
-        alert('❌ 恢复失败: ' + err.message);
-      }
+      } catch (err) { alert('❌ 恢复失败: ' + err.message); }
       e.target.value = '';
     };
     reader.readAsText(file);
   });
 
-  // 更新备份时间
-  $('#lastBackupTimeBlind').textContent = '数据已存储在服务器';
-
-  // 键盘关闭
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       hideResult();
@@ -592,10 +656,7 @@ function bindEvents() {
     }
   });
 
-  // 页面关闭前确保数据已保存
-  window.addEventListener('beforeunload', () => {
-    saveAppDataNow();
-  });
+  window.addEventListener('beforeunload', () => { saveAppDataNow(); });
 }
 
 // ===== 初始化 =====
@@ -609,7 +670,6 @@ async function init() {
     alert('⚠️ 无法连接到服务器，请确认服务器已启动。\n\n' + e.message);
     return;
   }
-
   loadState();
   initBackgroundParticles();
   updateAllUI();
