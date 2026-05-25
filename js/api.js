@@ -8,7 +8,15 @@ let saveTimer = null;    // 防抖保存
 // 加载数据（页面启动时调用，必须成功）
 async function loadAppData() {
   const res = await fetch(DATA_URL);
-  if (!res.ok) throw new Error('服务器返回 ' + res.status);
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('服务器返回 ' + res.status + ' (权限不足，请检查服务器配置)');
+    }
+    if (res.status === 404) {
+      throw new Error('服务器返回 404 (API 路由不存在，请确认 server.py 已启动)');
+    }
+    throw new Error('服务器返回 ' + res.status + ': ' + res.statusText);
+  }
   appData = await res.json();
   if (!appData || typeof appData.sharedPoints !== 'number') {
     throw new Error('服务器数据格式异常，请检查 data.json');

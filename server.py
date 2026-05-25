@@ -1,9 +1,22 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, make_response
 import json
 import os
 from datetime import datetime
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+
+# CORS — 允许跨域和本地访问
+@app.after_request
+def add_cors_headers(resp):
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return resp
+
+@app.before_request
+def handle_preflight():
+    if request.method == 'OPTIONS':
+        return make_response('', 200)
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.json')
 
