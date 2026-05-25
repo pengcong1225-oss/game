@@ -1016,8 +1016,7 @@
             const goal = goals.find(g => g.id === goalId);
             if (!goal) return;
             if (typeof addTaskRecord === 'function') {
-                const record = addTaskRecord(goal);
-                records.push(record);
+                addTaskRecord(goal);  // 内部已 push 记录 + 加积分
             } else {
                 records.push({ id: Date.now(), goalId: goal.id, name: goal.name, points: goal.points, icon: goal.icon, time: new Date().toISOString(), note: '' });
             }
