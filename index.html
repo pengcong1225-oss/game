@@ -116,6 +116,25 @@
           <div class="gift-list" id="giftSettingsList"></div>
           <button class="btn-add-gift" id="btnAddTier" style="margin-top:10px;">+ 添加新档位</button>
         </div>
+
+        <!-- Emoji 选择器弹出层 -->
+        <div class="emoji-picker-popup" id="emojiPicker" style="display:none;">
+          <div class="emoji-picker-grid" id="emojiGrid"></div>
+          <div class="emoji-picker-tabs">
+            <button class="emoji-tab active" data-cat="faces">表情</button>
+            <button class="emoji-tab" data-cat="objects">物品</button>
+            <button class="emoji-tab" data-cat="symbols">符号</button>
+            <button class="emoji-tab" data-cat="nature">自然</button>
+            <button class="emoji-tab" data-cat="custom">图片</button>
+          </div>
+          <div class="emoji-picker-custom" id="emojiCustom" style="display:none;">
+            <input type="text" id="imageUrlInput" placeholder="粘贴图片URL...">
+            <input type="file" id="imageFileInput" accept="image/*">
+            <button class="btn-backup" id="btnUploadImage">📷 上传图片</button>
+            <canvas id="imagePreviewCanvas" style="display:none;max-width:100px;max-height:100px;"></canvas>
+            <button class="btn-backup" id="btnUseImage" style="display:none;">✅ 使用此图</button>
+          </div>
+        </div>
         <!-- 概率预览 -->
         <div class="setting-group">
           <h4>概率预览</h4>

@@ -145,7 +145,9 @@ function updatePrizeGrid() {
   if (title) title.innerHTML = `<span class="title-deco">★</span> ${tier.name} · 奖品池 <span class="title-deco">★</span>`;
   dom.prizeGrid.innerHTML = tier.gifts.map(g => `
     <div class="prize-card" data-rarity="${g.rarity}">
-      <span class="prize-emoji">${g.emoji}</span>
+      ${g.image
+        ? `<img src="${g.image}" class="prize-img" alt="${g.name}">`
+        : `<span class="prize-emoji">${g.emoji}</span>`}
       <span class="prize-name">${g.name}</span>
       <span class="prize-rarity-badge ${g.rarity}">${RARITY_CONFIG[g.rarity].label}</span>
       <span class="prize-prob">概率 ${g.probability}%</span>
@@ -364,7 +366,11 @@ function showResult(gift) {
   const r = RARITY_CONFIG[gift.rarity];
   dom.resultRarity.textContent = r.label;
   dom.resultRarity.style.color = r.color;
-  dom.resultEmoji.textContent = gift.emoji;
+  if (gift.image) {
+    dom.resultEmoji.innerHTML = `<img src="${gift.image}" style="width:96px;height:96px;object-fit:contain;border-radius:16px;">`;
+  } else {
+    dom.resultEmoji.textContent = gift.emoji;
+  }
   dom.resultName.textContent = gift.name;
   dom.resultName.style.color = r.color;
   dom.resultStars.textContent = r.stars;
@@ -410,7 +416,9 @@ function renderTierSettings() {
       <div class="tier-gift-list">
         ${tier.gifts.map((g, gi) => `
           <div class="gift-setting-item">
-            <input class="gift-emoji-input" value="${g.emoji}" data-tier="${ti}" data-index="${gi}" data-field="emoji" maxlength="4">
+            ${g.image
+              ? `<img src="${g.image}" class="img-thumb picker-btn" data-tier="${ti}" data-index="${gi}" title="点击更换图标">`
+              : `<button class="emoji-btn picker-btn" data-tier="${ti}" data-index="${gi}" title="点击选择图标">${g.emoji}</button>`}
             <input class="gift-name-input" value="${g.name}" data-tier="${ti}" data-index="${gi}" data-field="name" placeholder="奖品名称">
             <select data-tier="${ti}" data-index="${gi}" data-field="rarity">
               ${Object.entries(RARITY_CONFIG).map(([k,v]) => `<option value="${k}" ${g.rarity===k?'selected':''}>${v.label}</option>`).join('')}
@@ -468,6 +476,137 @@ function renderTierSettings() {
       gameState.drawTiers[ti].gifts.push({ id: newId, name: '新奖品', emoji: '🎁', rarity: 'common', probability: 5 });
       renderTierSettings();
     });
+  });
+
+  // Emoji 选择器
+  bindEmojiPicker(list);
+}
+
+// ===== Emoji 选择器 =====
+const EMOJI_CATEGORIES = {
+  faces: ['😀','😂','🤩','😎','🥳','😍','🤗','😇','🤔','😏','😤','🥺','😱','🤯','😴','💀','👻','🤖','👽','🎃','😺','💩','👶','🧒'],
+  objects: ['🎁','💎','🪙','🔮','⚡','🌟','🏅','🃏','🎮','📱','💻','⌚','🚗','🚀','🏠','🎒','📚','✏️','🎨','🎵','🔬','⚽','🏆','🎹'],
+  symbols: ['❤️','💛','💚','💙','💜','🖤','💯','✨','🔥','💥','🌈','❄️','💧','🎵','✅','❌','💫','⭐','🟢','🔴','🟡','🔵','🟣','⚪'],
+  nature: ['🌸','🌺','🌻','🌹','🍀','🌲','🌊','☀️','🌙','⛅','🌈','⭐','🌍','🔥','💧','🍎','🍕','🎂','🍦','☕','🍺','🥇','🎯','💪'],
+};
+
+let pickerTarget = null;  // { tier, index }
+
+function bindEmojiPicker(list) {
+  const picker = $('#emojiPicker');
+  const grid = $('#emojiGrid');
+  let activeCat = 'faces';
+
+  function showPicker(btn) {
+    const ti = parseInt(btn.dataset.tier), gi = parseInt(btn.dataset.index);
+    if (isNaN(ti) || isNaN(gi)) return;
+    pickerTarget = { tier: ti, index: gi };
+    const rect = btn.getBoundingClientRect();
+    picker.style.display = 'block';
+    picker.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
+    picker.style.top = (rect.bottom + 4 > window.innerHeight - 300 ? rect.top - 310 : rect.bottom + 4) + 'px';
+    renderEmojiGrid(activeCat);
+    $('#emojiCustom').style.display = activeCat === 'custom' ? 'flex' : 'none';
+    $('#imageUrlInput').value = '';
+    $('#imagePreviewCanvas').style.display = 'none';
+    $('#btnUseImage').style.display = 'none';
+  }
+
+  function renderEmojiGrid(cat) {
+    if (cat === 'custom') return;
+    const emojis = EMOJI_CATEGORIES[cat] || EMOJI_CATEGORIES.faces;
+    grid.innerHTML = emojis.map(e => `<span data-emoji="${e}">${e}</span>`).join('');
+    grid.querySelectorAll('span').forEach(span => {
+      span.addEventListener('click', () => {
+        if (pickerTarget) {
+          const gift = gameState.drawTiers[pickerTarget.tier].gifts[pickerTarget.index];
+          gift.emoji = span.dataset.emoji;
+          gift.image = null;  // 清除图片
+          renderTierSettings();
+        }
+        hidePicker();
+      });
+    });
+  }
+
+  function hidePicker() {
+    picker.style.display = 'none';
+    pickerTarget = null;
+  }
+
+  function useImageUrl(url) {
+    if (!pickerTarget || !url) return;
+    const gift = gameState.drawTiers[pickerTarget.tier].gifts[pickerTarget.index];
+    gift.image = url;
+    renderTierSettings();
+    hidePicker();
+  }
+
+  // 绑定弹出按钮
+  list.querySelectorAll('.picker-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showPicker(btn);
+    });
+  });
+
+  // 分类切换
+  picker.querySelectorAll('.emoji-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      picker.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeCat = tab.dataset.cat;
+      const isCustom = activeCat === 'custom';
+      grid.style.display = isCustom ? 'none' : 'grid';
+      $('#emojiCustom').style.display = isCustom ? 'flex' : 'none';
+      renderEmojiGrid(activeCat);
+    });
+  });
+
+  // 图片上传
+  $('#btnUploadImage').addEventListener('click', () => $('#imageFileInput').click());
+  $('#imageFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const canvas = $('#imagePreviewCanvas');
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 120;
+        const scale = Math.min(maxW / img.width, 1);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.style.display = 'block';
+        $('#btnUseImage').style.display = 'inline-block';
+        $('#btnUseImage').dataset.url = canvas.toDataURL('image/jpeg', 0.7);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+
+  // 使用图片
+  $('#btnUseImage').addEventListener('click', () => {
+    const url = $('#btnUseImage').dataset.url;
+    if (url) useImageUrl(url);
+  });
+
+  // URL 输入回车
+  $('#imageUrlInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const url = e.target.value.trim();
+      if (url) useImageUrl(url);
+    }
+  });
+
+  // 点击外部关闭
+  document.addEventListener('click', (e) => {
+    if (!picker.contains(e.target) && !e.target.closest('.picker-btn')) {
+      hidePicker();
+    }
   });
 }
 
