@@ -946,7 +946,8 @@
                 return `<div class="record-item">
                     <div class="record-info"><span class="record-icon">${record.icon}</span>
                     <div class="record-details"><h4>${record.name}</h4><span class="record-date">${timeStr}${record.note ? ' · ' + record.note : ''}</span></div></div>
-                    <span class="record-points">+${record.points}</span></div>`;
+                    <span class="record-points">+${record.points}</span>
+                    <button class="btn btn-danger btn-small" onclick="deleteRecord(${record.id})" title="删除此记录并扣回积分">✕</button></div>`;
             }).join('');
         }
 
@@ -1039,6 +1040,24 @@
                 renderGoals();
                 updateStats();
             }
+        }
+
+        // 删除完成记录（扣回积分）
+        function deleteRecord(recordId) {
+            const record = records.find(r => r.id === recordId);
+            if (!record) return;
+            if (!confirm(`确定要删除这条记录吗？\n\n${record.name}  +${record.points}分\n\n积分将被扣回。`)) return;
+            records = records.filter(r => r.id !== recordId);
+            if (typeof deductPoints === 'function') {
+                deductPoints(record.points);
+            } else {
+                const pts = getPoints();
+                if (pts !== null) setPoints(Math.max(0, pts - record.points));
+            }
+            saveData();
+            renderRecords();
+            renderGoals();
+            updateStats();
         }
 
         // 快速完成任务（+积分到服务端）
